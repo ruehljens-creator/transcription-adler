@@ -3,119 +3,166 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline Transcriber & Analyzer</title>
-    <!-- Google Fonts: Outfit for titles, Inter for details -->
+    <title>Transcription Adler – Offline Transkription und Übersetzung</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Skip-Link für Tastaturnutzer und Screenreader -->
+    <a href="#main-content" class="skip-link">Zum Hauptinhalt springen</a>
+
+    <!-- Live-Region für Statusmeldungen an Screenreader -->
+    <div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+
     <div class="app-container">
-        <!-- Sidebar Panel -->
-        <aside class="sidebar">
+        <!-- Sidebar mit Einstellungen -->
+        <aside class="sidebar" aria-label="Einstellungen">
             <div class="brand">
-                <div class="logo-icon">🦅</div>
-                <h1>TRANSCRIPTION ADLER</h1>
+                <span class="logo-icon" aria-hidden="true">🦅</span>
+                <h1>Transcription Adler</h1>
             </div>
-            
-            <div class="settings-section">
-                <h2>EINSTELLUNGEN</h2>
-                
-                <!-- Source Language -->
+
+            <form class="settings-section" id="settings-form" onsubmit="return false;">
+                <h2 id="settings-heading">Einstellungen</h2>
+
+                <!-- Quellsprache -->
                 <div class="setting-group">
-                    <label for="source-lang">Spracherkennung</label>
+                    <label for="source-lang">Sprache der Aufnahme</label>
                     <div class="select-wrapper">
-                        <select id="source-lang">
-                            <option value="auto">🔍 Automatisch erkennen</option>
-                            <option value="de">German (Deutsch)</option>
-                            <option value="en">English (Englisch)</option>
-                            <option value="es">Spanish (Spanisch)</option>
-                            <option value="fr">French (Französisch)</option>
-                            <option value="it">Italian (Italienisch)</option>
+                        <select id="source-lang" aria-describedby="source-lang-help">
+                            <option value="auto">Automatisch erkennen</option>
+                            <option value="de">Deutsch</option>
+                            <option value="en">Englisch</option>
+                            <option value="es">Spanisch</option>
+                            <option value="fr">Französisch</option>
+                            <option value="it">Italienisch</option>
                         </select>
                     </div>
+                    <p id="source-lang-help" class="setting-help">
+                        Die Sprache, in der das Audio aufgenommen wurde.
+                    </p>
                 </div>
 
-                <!-- Translation Target -->
+                <!-- Übersetzung -->
                 <div class="setting-group">
                     <div class="toggle-header">
-                        <label for="translate-enable">In Zielsprache übersetzen</label>
-                        <label class="switch">
-                            <input type="checkbox" id="translate-enable">
-                            <span class="slider"></span>
+                        <label for="translate-enable" class="toggle-label">In Zielsprache übersetzen</label>
+                        <label class="switch" aria-hidden="false">
+                            <input type="checkbox" id="translate-enable" aria-describedby="translate-help">
+                            <span class="slider" aria-hidden="true"></span>
+                            <span class="sr-only">Übersetzung aktivieren</span>
                         </label>
                     </div>
+                    <p id="translate-help" class="setting-help">
+                        Wenn aktiviert, wird das Transkript zusätzlich in die unten gewählte Sprache übersetzt.
+                    </p>
                     <div class="select-wrapper disabled" id="target-lang-wrapper">
-                        <select id="target-lang" disabled>
-                            <option value="de" selected>German (Deutsch)</option>
-                            <option value="en">English (Englisch)</option>
-                            <option value="es">Spanish (Spanisch)</option>
-                            <option value="fr">French (Französisch)</option>
-                            <option value="it">Italian (Italienisch)</option>
+                        <label for="target-lang" class="sr-only">Zielsprache der Übersetzung</label>
+                        <select id="target-lang" disabled aria-label="Zielsprache der Übersetzung">
+                            <option value="de" selected>Deutsch</option>
+                            <option value="en">Englisch</option>
+                            <option value="es">Spanisch</option>
+                            <option value="fr">Französisch</option>
+                            <option value="it">Italienisch</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Model Selection -->
-                <div class="setting-group">
-                    <label for="model-size">Whisper Modellgröße</label>
+                <!-- Modellgröße -->
+                <fieldset class="setting-group">
+                    <legend>Whisper-Modellgröße</legend>
                     <div class="select-wrapper">
-                        <select id="model-size">
-                            <option value="tiny">Tiny (Schnellst, ~74MB)</option>
-                            <option value="base" selected>Base (Standard, ~140MB)</option>
-                            <option value="small">Small (Genauer, ~460MB)</option>
+                        <label for="model-size" class="sr-only">Modellgröße auswählen</label>
+                        <select id="model-size" aria-describedby="model-help">
+                            <option value="tiny">Tiny – sehr schnell, geringere Genauigkeit (74 MB)</option>
+                            <option value="base" selected>Base – Standard, gute Balance (140 MB)</option>
+                            <option value="small">Small – langsamer, höhere Genauigkeit (460 MB)</option>
                         </select>
                     </div>
-                </div>
-            </div>
+                    <p id="model-help" class="setting-help">
+                        Größere Modelle liefern bessere Ergebnisse, brauchen aber mehr Zeit.
+                    </p>
+                </fieldset>
+            </form>
 
-            <!-- Start Button -->
-            <button id="start-btn" class="btn btn-primary" disabled>
-                <span class="btn-icon">▶</span> Transkription starten
+            <button id="start-btn" type="button" class="btn btn-primary" disabled aria-describedby="start-help">
+                <span class="btn-icon" aria-hidden="true">▶</span>
+                Transkription starten
             </button>
-            
+            <p id="start-help" class="sr-only">
+                Startet die Transkription aller Dateien in der Warteschlange.
+                Diese Schaltfläche ist nur aktiv, wenn Dateien in der Warteschlange sind.
+            </p>
+
             <div class="sidebar-footer">
-                <span>🔒 Alles läuft 100% lokal</span>
+                <p>
+                    <span aria-hidden="true">🔒</span>
+                    <span>Verarbeitung läuft vollständig lokal auf diesem Gerät</span>
+                </p>
+                <div class="info-btn-container">
+                    <button id="info-btn" type="button" class="info-button" aria-label="Programminformationen und Lizenzen öffnen">
+                        <span aria-hidden="true">ℹ️</span> Info & Lizenzen
+                    </button>
+                </div>
             </div>
         </aside>
 
-        <!-- Main Dashboard -->
-        <main class="dashboard">
-            <!-- Drag & Drop Zone -->
-            <section class="drop-zone-container">
-                <div id="drop-zone" class="drop-zone">
-                    <div class="drop-icon">📁</div>
-                    <h3>Video- und Audiodateien hier ablegen</h3>
-                    <p class="drop-subtext">Dateien verbleiben an ihrem Originalort und werden nicht kopiert</p>
-                    <button id="browse-btn" class="btn btn-secondary">Dateien auswählen...</button>
+        <!-- Hauptbereich -->
+        <main class="dashboard" id="main-content" tabindex="-1">
+            <h2 class="visually-hidden-heading">Dateiverarbeitung</h2>
+
+            <!-- Drag-and-Drop-Zone -->
+            <section class="drop-zone-container" aria-labelledby="drop-heading">
+                <div id="drop-zone"
+                     class="drop-zone"
+                     role="region"
+                     aria-labelledby="drop-heading"
+                     aria-describedby="drop-instructions">
+                    <span class="drop-icon" aria-hidden="true">📁</span>
+                    <h3 id="drop-heading">Video- und Audiodateien hinzufügen</h3>
+                    <p id="drop-instructions" class="drop-subtext">
+                        Dateien hier ablegen oder Schaltfläche unten verwenden.
+                        Dateien werden nicht kopiert, sondern bleiben am Originalort.
+                    </p>
+                    <button id="browse-btn" type="button" class="btn btn-secondary">
+                        Dateien auswählen
+                    </button>
                 </div>
             </section>
 
-            <!-- Imported Clips Queue -->
-            <section class="queue-container">
+            <!-- Warteschlange -->
+            <section class="queue-container" aria-labelledby="queue-heading">
                 <div class="queue-header">
-                    <h2>Importierte Clips</h2>
-                    <span id="queue-count" class="badge">0 Clips</span>
-                    <button id="clear-btn" class="btn btn-link" style="display: none;">Liste leeren</button>
+                    <h2 id="queue-heading">Warteschlange</h2>
+                    <span id="queue-count" class="badge" aria-live="polite">0 Dateien</span>
+                    <button id="clear-btn"
+                            type="button"
+                            class="btn btn-link"
+                            hidden>
+                        Liste leeren
+                    </button>
                 </div>
-                
-                <div class="queue-list-wrapper">
+
+                <div class="queue-list-wrapper" role="region" aria-labelledby="queue-heading" tabindex="0">
                     <table class="queue-table">
+                        <caption class="sr-only">
+                            Liste aller hinzugefügten Dateien mit Metadaten und Verarbeitungsstatus.
+                        </caption>
                         <thead>
                             <tr>
-                                <th>Dateiname</th>
-                                <th>Dauer</th>
-                                <th>Erstellungsdatum</th>
-                                <th>Metadaten Ort</th>
-                                <th>Status</th>
+                                <th scope="col">Dateiname</th>
+                                <th scope="col">Dauer</th>
+                                <th scope="col">Erstellungsdatum</th>
+                                <th scope="col">Aufnahmeort</th>
+                                <th scope="col">Status</th>
                             </tr>
                         </thead>
                         <tbody id="queue-tbody">
-                            <!-- Queued file rows will be dynamically injected here -->
                             <tr id="empty-state">
                                 <td colspan="5" class="empty-text">
-                                    Keine Dateien in der Warteschlange. Ziehe Dateien in den oberen Bereich, um sie hinzuzufügen.
+                                    Keine Dateien in der Warteschlange. Dateien zum oberen Bereich hinzufügen, um zu beginnen.
                                 </td>
                             </tr>
                         </tbody>
@@ -124,7 +171,63 @@
             </section>
         </main>
     </div>
-    
+
+        <!-- Info Modal -->
+    <div id="info-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-labelledby="modal-title">
+        <div class="modal-content" tabindex="-1">
+            <header class="modal-header">
+                <h2 id="modal-title">Über Transcription Adler</h2>
+                <button id="close-info-btn" type="button" class="btn-close" aria-label="Schließen">&times;</button>
+            </header>
+            <div class="modal-body">
+                <p class="author-info">Programmiert von <strong>Jens Rühl</strong></p>
+                
+                <h3>Lizenz</h3>
+                <p>Transcription Adler steht unter der <strong>MIT-Lizenz</strong>.</p>
+
+                <h3>Open Source Software</h3>
+                <p>Dieses Programm nutzt die folgenden Open-Source-Bibliotheken und Tools:</p>
+                <ul class="oss-list">
+                    <li>
+                        <a href="https://github.com/openai/whisper" target="_blank" rel="noopener">OpenAI Whisper</a>
+                        <span class="oss-license">MIT Lizenz</span>
+                        <span class="oss-desc">- Offline-Spracherkennungsmodell</span>
+                    </li>
+                    <li>
+                        <a href="https://github.com/r0y/pywebview" target="_blank" rel="noopener">PyWebView</a>
+                        <span class="oss-license">BSD 3-Clause Lizenz</span>
+                        <span class="oss-desc">- HTML-Desktop-Fenster-Wrapper</span>
+                    </li>
+                    <li>
+                        <a href="https://github.com/nidhaloff/deep-translator" target="_blank" rel="noopener">Deep Translator</a>
+                        <span class="oss-license">MIT Lizenz</span>
+                        <span class="oss-desc">- Übersetzungsbibliothek</span>
+                    </li>
+                    <li>
+                        <a href="https://github.com/python-openxml/python-docx" target="_blank" rel="noopener">python-docx</a>
+                        <span class="oss-license">MIT Lizenz</span>
+                        <span class="oss-desc">- Generierung von Word-Dokumenten</span>
+                    </li>
+                    <li>
+                        <a href="https://github.com/geopy/geopy" target="_blank" rel="noopener">Geopy</a>
+                        <span class="oss-license">MIT Lizenz</span>
+                        <span class="oss-desc">- Auslesung geografischer Standortdaten</span>
+                    </li>
+                    <li>
+                        <a href="https://github.com/python-pillow/Pillow" target="_blank" rel="noopener">Pillow</a>
+                        <span class="oss-license">HPND Lizenz</span>
+                        <span class="oss-desc">- Bildverarbeitung (Bild-Metadaten)</span>
+                    </li>
+                    <li>
+                        <a href="https://ffmpeg.org" target="_blank" rel="noopener">FFmpeg</a>
+                        <span class="oss-license">LGPL / GPL Lizenz</span>
+                        <span class="oss-desc">- Audio- und Videokonvertierung</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

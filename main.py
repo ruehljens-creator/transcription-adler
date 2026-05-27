@@ -36,7 +36,7 @@ def set_dock_icon():
 
 class Api:
     def __init__(self):
-        self.window = None
+        self._window = None
 
     def get_file_metadata(self, file_path):
         """
@@ -54,9 +54,16 @@ class Api:
         """
         Opens a native system file selector as a fallback/alternative to drag-and-drop.
         """
-        file_types = ('Video and Audio files (*.mp4;*.mov;*.mkv;*.mp3;*.wav;*.m4a)', 'All files (*.*)')
-        result = self.window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=(file_types,))
-        return result
+        try:
+            import sys
+            file_types = ('Video and Audio files (*.mp4;*.mov;*.mkv;*.mp3;*.wav;*.m4a)', 'All files (*.*)')
+            result = self._window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True, file_types=file_types)
+            return result
+        except Exception as e:
+            import sys
+            print(f"Error in select_files: {e}", file=sys.stderr)
+            sys.stderr.flush()
+            return []
 
     def start_transcription(self, files, source_lang, target_lang, model_size):
         """
@@ -83,7 +90,7 @@ class Api:
                 safe_msg = msg.replace("'", "\\'")
                 safe_file = file_path.replace("\\", "\\\\").replace("'", "\\'")
                 js_code = f"onFileProgress('{safe_file}', {percent}, '{safe_msg}')"
-                self.window.evaluate_js(js_code)
+                self._window.evaluate_js(js_code)
 
             try:
                 # 1. Fetch metadata
@@ -118,7 +125,7 @@ def setup_events(window, api):
     """
     Hooks window load events to bind the python-side DOM drag-and-drop listener.
     """
-    api.window = window
+    api._window = window
     
     def on_loaded():
         print("DOM geladen. Binde native Drag & Drop Events...")
@@ -158,8 +165,8 @@ def main():
         title='Transcription Adler',
         url=html_path,
         js_api=api,
-        width=1020,
-        height=720,
+        width=1200,
+        height=850,
         min_size=(900, 600),
         background_color='#0f172a' # Matches dashboard dark slate background
     )

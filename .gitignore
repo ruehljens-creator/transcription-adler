@@ -8,6 +8,7 @@ __pycache__/
 Thumbs.db
 
 # Virtual environments
+.venv/
 venv/
 ENV/
 
@@ -17,9 +18,20 @@ test_clip.mp3
 test_clip_transkript.docx
 test_output.docx
 
-# Large compiled binaries, weights, and PyInstaller folders
+# Large compiled binaries, weights, and build artifacts
 *.pt
 *.dmg
-*.spec
 dist/
 build/
+
+# Build-Downloads (werden lokal beim Build erzeugt)
+ffmpeg.exe
+ffprobe.exe
+
+# IDE-Dateien
+.vscode/
+.idea/
+
+# WICHTIG: TranscriptionAdler.spec wird eingecheckt, andere .spec ignoriert
+*.spec
+!TranscriptionAdler.spec
