@@ -25,7 +25,7 @@ Source: "dist\TranscriptionAdler\*"; DestDir: "{app}"; Flags: recursesubdirs cre
 
 [Icons]
 Name: "{group}\Transcription Adler"; Filename: "{app}\TranscriptionAdler.exe"
-Name: "{commondesktops}\Transcription Adler"; Filename: "{app}\TranscriptionAdler.exe"; Tasks: desktopicon
+Name: "{commondesktop}\Transcription Adler"; Filename: "{app}\TranscriptionAdler.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\TranscriptionAdler.exe"; Description: "{cm:LaunchProgram,Transcription Adler}"; Flags: nowait postinstall skipifsilent
