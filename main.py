@@ -6,6 +6,27 @@ from metadata import get_metadata
 from transcribe import transcribe_file
 from docx_generator import create_docx
 
+def set_dock_icon():
+    """
+    Sets the custom macOS Dock icon using PyObjC AppKit if running on macOS.
+    """
+    try:
+        import platform
+        if platform.system() == 'Darwin':
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            icon_path = os.path.join(current_dir, 'eagle_icon.png')
+            if os.path.exists(icon_path):
+                from AppKit import NSApplication, NSImage
+                app = NSApplication.sharedApplication()
+                image = NSImage.alloc().initByReferencingFile_(icon_path)
+                if image:
+                    app.setApplicationIconImage_(image)
+                    print("macOS Dock Icon erfolgreich gesetzt.")
+            else:
+                print(f"Dock Icon nicht gefunden unter: {icon_path}")
+    except Exception as e:
+        print(f"Fehler beim Setzen des Dock Icons: {e}")
+
 class Api:
     def __init__(self):
         self.window = None
@@ -118,6 +139,9 @@ def setup_events(window, api):
 
 def main():
     api = Api()
+    
+    # Set custom macOS Dock icon
+    set_dock_icon()
     
     # Resolve the index.html path relative to main.py
     current_dir = os.path.dirname(os.path.abspath(__file__))
