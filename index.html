@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Transcriber & Analyzer</title>
+    <!-- Google Fonts: Outfit for titles, Inter for details -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Panel -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo-icon">🦅</div>
+                <h1>TRANSCRIPTION ADLER</h1>
+            </div>
+            
+            <div class="settings-section">
+                <h2>EINSTELLUNGEN</h2>
+                
+                <!-- Source Language -->
+                <div class="setting-group">
+                    <label for="source-lang">Spracherkennung</label>
+                    <div class="select-wrapper">
+                        <select id="source-lang">
+                            <option value="auto">🔍 Automatisch erkennen</option>
+                            <option value="de">German (Deutsch)</option>
+                            <option value="en">English (Englisch)</option>
+                            <option value="es">Spanish (Spanisch)</option>
+                            <option value="fr">French (Französisch)</option>
+                            <option value="it">Italian (Italienisch)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Translation Target -->
+                <div class="setting-group">
+                    <div class="toggle-header">
+                        <label for="translate-enable">In Zielsprache übersetzen</label>
+                        <label class="switch">
+                            <input type="checkbox" id="translate-enable">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="select-wrapper disabled" id="target-lang-wrapper">
+                        <select id="target-lang" disabled>
+                            <option value="de" selected>German (Deutsch)</option>
+                            <option value="en">English (Englisch)</option>
+                            <option value="es">Spanish (Spanisch)</option>
+                            <option value="fr">French (Französisch)</option>
+                            <option value="it">Italian (Italienisch)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Model Selection -->
+                <div class="setting-group">
+                    <label for="model-size">Whisper Modellgröße</label>
+                    <div class="select-wrapper">
+                        <select id="model-size">
+                            <option value="tiny">Tiny (Schnellst, ~74MB)</option>
+                            <option value="base" selected>Base (Standard, ~140MB)</option>
+                            <option value="small">Small (Genauer, ~460MB)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start Button -->
+            <button id="start-btn" class="btn btn-primary" disabled>
+                <span class="btn-icon">▶</span> Transkription starten
+            </button>
+            
+            <div class="sidebar-footer">
+                <span>🔒 Alles läuft 100% lokal</span>
+            </div>
+        </aside>
+
+        <!-- Main Dashboard -->
+        <main class="dashboard">
+            <!-- Drag & Drop Zone -->
+            <section class="drop-zone-container">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-icon">📁</div>
+                    <h3>Video- und Audiodateien hier ablegen</h3>
+                    <p class="drop-subtext">Dateien verbleiben an ihrem Originalort und werden nicht kopiert</p>
+                    <button id="browse-btn" class="btn btn-secondary">Dateien auswählen...</button>
+                </div>
+            </section>
+
+            <!-- Imported Clips Queue -->
+            <section class="queue-container">
+                <div class="queue-header">
+                    <h2>Importierte Clips</h2>
+                    <span id="queue-count" class="badge">0 Clips</span>
+                    <button id="clear-btn" class="btn btn-link" style="display: none;">Liste leeren</button>
+                </div>
+                
+                <div class="queue-list-wrapper">
+                    <table class="queue-table">
+                        <thead>
+                            <tr>
+                                <th>Dateiname</th>
+                                <th>Dauer</th>
+                                <th>Erstellungsdatum</th>
+                                <th>Metadaten Ort</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-tbody">
+                            <!-- Queued file rows will be dynamically injected here -->
+                            <tr id="empty-state">
+                                <td colspan="5" class="empty-text">
+                                    Keine Dateien in der Warteschlange. Ziehe Dateien in den oberen Bereich, um sie hinzuzufügen.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

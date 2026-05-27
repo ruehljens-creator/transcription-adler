@@ -1,0 +1,18 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+ENV/
+
+# Application generated files & test clips
+*.docx
+test_clip.mp3
+test_clip_transkript.docx
+test_output.docx
