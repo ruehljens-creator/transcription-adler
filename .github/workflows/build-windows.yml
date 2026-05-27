@@ -1,0 +1,59 @@
+name: Build Windows Application
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install Python Dependencies
+      run: |
+        pip install --upgrade pip
+        pip install pyinstaller webview openai-whisper deep-translator python-docx geopy torch numpy Pillow
+
+    - name: Set up FFmpeg
+      uses: federicocarboni/setup-ffmpeg@v3
+      id: setup-ffmpeg
+
+    - name: Copy FFmpeg Binaries to App Folder
+      shell: pwsh
+      run: |
+        $ffmpegPath = (Get-Command ffmpeg).Source
+        $ffprobePath = (Get-Command ffprobe).Source
+        Copy-Item $ffmpegPath -Destination .
+        Copy-Item $ffprobePath -Destination .
+        Write-Host "ffmpeg and ffprobe copied to project root."
+
+    - name: Download Whisper Offline Models (tiny & base)
+      shell: pwsh
+      run: |
+        python -c "import whisper, urllib.request; urllib.request.urlretrieve(whisper._MODELS['tiny'], 'tiny.pt')"
+        python -c "import whisper, urllib.request; urllib.request.urlretrieve(whisper._MODELS['base'], 'base.pt')"
+        Write-Host "Model weights tiny.pt and base.pt downloaded successfully."
+
+    - name: Build Standalone Windows Executable
+      run: |
+        pyinstaller --name="TranscriptionAdler" --windowed --noconfirm --icon="eagle_icon.ico" --add-data="index.html;." --add-data="style.css;." --add-data="app.js;." --add-data="eagle_icon.png;." --add-data="tiny.pt;." --add-data="base.pt;." --add-binary="ffmpeg.exe;." --add-binary="ffprobe.exe;." main.py
+
+    - name: Build Windows Installer (Inno Setup)
+      run: |
+        iscc installer.iss
+
+    - name: Upload Windows Setup Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TranscriptionAdler-Windows-Setup
+        path: TranscriptionAdler_Setup.exe

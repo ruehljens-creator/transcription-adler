@@ -1,6 +1,13 @@
+import sys
+import os
+
+# If running as a bundled executable, add the bundle folder to PATH
+# so that the application and libraries (like Whisper) can locate bundled ffmpeg/ffprobe.
+if getattr(sys, 'frozen', False):
+    os.environ["PATH"] = sys._MEIPASS + os.pathsep + os.environ.get("PATH", "")
+
 import webview
 import threading
-import os
 from webview.dom import DOMEventHandler
 from metadata import get_metadata
 from transcribe import transcribe_file

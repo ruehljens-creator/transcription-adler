@@ -8,16 +8,34 @@ _model_cache = {}
 def get_whisper_model(model_name="base"):
     """
     Loads and caches the Whisper model on CPU or MPS (Metal Performance Shaders on Apple Silicon).
+    Supports loading bundled model files directly from the frozen executable resources.
     """
     if model_name not in _model_cache:
         import torch
         device = "mps" if torch.backends.mps.is_available() else "cpu"
+        
+        # Check if the model weights are bundled in the PyInstaller executable
+        model_path = model_name
+        import sys
+        if getattr(sys, 'frozen', False):
+            bundle_dir = sys._MEIPASS
+            local_model_file = f"{model_name}.pt"
+            bundled_path = os.path.join(bundle_dir, local_model_file)
+            if os.path.exists(bundled_path):
+                model_path = bundled_path
+                print(f"Nutze gebündelte Modelldatei: {bundled_path}")
+        
         print(f"Lade Whisper-Modell '{model_name}' auf Device '{device}'...")
         try:
-            _model_cache[model_name] = whisper.load_model(model_name, device=device)
+            _model_cache[model_name] = whisper.load_model(model_path, device=device)
         except Exception as e:
             print(f"WARNUNG: Laden auf {device} fehlgeschlagen: {e}. Verwende CPU-Fallback.")
-            _model_cache[model_name] = whisper.load_model(model_name, device="cpu")
+            try:
+                _model_cache[model_name] = whisper.load_model(model_path, device="cpu")
+            except Exception as err2:
+                # If path failed, try default name download fallback
+                print(f"Fehler beim Laden von Pfad {model_path}. Versuche Online-Download Fallback: {err2}")
+                _model_cache[model_name] = whisper.load_model(model_name, device="cpu")
     return _model_cache[model_name]
 
 def format_timestamp(seconds):

@@ -16,3 +16,10 @@ ENV/
 test_clip.mp3
 test_clip_transkript.docx
 test_output.docx
+
+# Large compiled binaries, weights, and PyInstaller folders
+*.pt
+*.dmg
+*.spec
+dist/
+build/
