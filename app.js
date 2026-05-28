@@ -5,6 +5,107 @@
 // State
 let fileQueue = [];
 let isProcessing = false;
+let customOutputPath = '';
+
+function saveSettings() {
+    try {
+        const settings = {
+            sourceLang: document.getElementById('source-lang')?.value,
+            translateEnable: document.getElementById('translate-enable')?.checked,
+            targetLang: document.getElementById('target-lang')?.value,
+            modelSize: document.getElementById('model-size')?.value,
+            outputDirType: document.getElementById('output-dir-type')?.value,
+            customOutputPath: customOutputPath,
+            customPathInput: document.getElementById('custom-path-input')?.value,
+            diarizationEnable: document.getElementById('diarization-enable')?.checked,
+            speakerCount: document.getElementById('speaker-count')?.value,
+            docxTransMode: document.getElementById('docx-trans-mode')?.value
+        };
+        localStorage.setItem('adler_settings', JSON.stringify(settings));
+    } catch (e) {
+        console.error("Fehler beim Speichern der Einstellungen:", e);
+    }
+}
+
+function loadSettings() {
+    try {
+        const data = localStorage.getItem('adler_settings');
+        if (!data) return;
+        const settings = JSON.parse(data);
+        
+        const srcSelect = document.getElementById('source-lang');
+        if (srcSelect && settings.sourceLang) srcSelect.value = settings.sourceLang;
+        
+        const transChk = document.getElementById('translate-enable');
+        if (transChk && settings.translateEnable !== undefined) {
+            transChk.checked = settings.translateEnable;
+            const targetLangWrapper = document.getElementById('target-lang-wrapper');
+            const targetLangSelect = document.getElementById('target-lang');
+            const docxGroup = document.getElementById('docx-trans-mode-group');
+            const docxSelect = document.getElementById('docx-trans-mode');
+            if (transChk.checked) {
+                if (targetLangWrapper) targetLangWrapper.classList.remove('disabled');
+                if (targetLangSelect) targetLangSelect.removeAttribute('disabled');
+                if (docxGroup) docxGroup.classList.remove('disabled');
+                if (docxSelect) docxSelect.removeAttribute('disabled');
+            } else {
+                if (targetLangWrapper) targetLangWrapper.classList.add('disabled');
+                if (targetLangSelect) targetLangSelect.setAttribute('disabled', 'true');
+                if (docxGroup) docxGroup.classList.add('disabled');
+                if (docxSelect) docxSelect.setAttribute('disabled', 'true');
+            }
+        }
+        
+        const targetSelect = document.getElementById('target-lang');
+        if (targetSelect && settings.targetLang) targetSelect.value = settings.targetLang;
+        
+        const modelSelect = document.getElementById('model-size');
+        if (modelSelect && settings.modelSize) modelSelect.value = settings.modelSize;
+        
+        const outDirSelect = document.getElementById('output-dir-type');
+        if (outDirSelect && settings.outputDirType) {
+            outDirSelect.value = settings.outputDirType;
+            const customPathContainer = document.getElementById('custom-path-container');
+            if (customPathContainer) {
+                if (outDirSelect.value === 'custom') {
+                    customPathContainer.style.display = 'flex';
+                } else {
+                    customPathContainer.style.display = 'none';
+                }
+            }
+        }
+        
+        if (settings.customOutputPath !== undefined) customOutputPath = settings.customOutputPath;
+        
+        const customPathInput = document.getElementById('custom-path-input');
+        if (customPathInput && settings.customPathInput !== undefined) {
+            customPathInput.value = settings.customPathInput;
+        }
+        
+        const diarChk = document.getElementById('diarization-enable');
+        if (diarChk && settings.diarizationEnable !== undefined) {
+            diarChk.checked = settings.diarizationEnable;
+            const speakerCountWrapper = document.getElementById('speaker-count-wrapper');
+            const speakerCountSelect = document.getElementById('speaker-count');
+            if (diarChk.checked) {
+                if (speakerCountWrapper) speakerCountWrapper.classList.remove('disabled');
+                if (speakerCountSelect) speakerCountSelect.removeAttribute('disabled');
+            } else {
+                if (speakerCountWrapper) speakerCountWrapper.classList.add('disabled');
+                if (speakerCountSelect) speakerCountSelect.setAttribute('disabled', 'true');
+            }
+        }
+        
+        const speakerSelect = document.getElementById('speaker-count');
+        if (speakerSelect && settings.speakerCount) speakerSelect.value = settings.speakerCount;
+        
+        const docxSelect = document.getElementById('docx-trans-mode');
+        if (docxSelect && settings.docxTransMode) docxSelect.value = settings.docxTransMode;
+        
+    } catch (e) {
+        console.error("Fehler beim Laden der Einstellungen:", e);
+    }
+}
 
 // DOM
 const sourceLangSelect = document.getElementById('source-lang');
@@ -43,15 +144,26 @@ function announce(message) {
 // Übersetzungs-Toggle
 // ------------------------------------------------------------
 translateEnableCheckbox.addEventListener('change', () => {
+    const docxGroup = document.getElementById('docx-trans-mode-group');
+    const docxSelect = document.getElementById('docx-trans-mode');
     if (translateEnableCheckbox.checked) {
         targetLangWrapper.classList.remove('disabled');
         targetLangSelect.removeAttribute('disabled');
+        if (docxGroup && docxSelect) {
+            docxGroup.classList.remove('disabled');
+            docxSelect.removeAttribute('disabled');
+        }
         announce('Übersetzung aktiviert. Zielsprache kann ausgewählt werden.');
     } else {
         targetLangWrapper.classList.add('disabled');
         targetLangSelect.setAttribute('disabled', 'true');
+        if (docxGroup && docxSelect) {
+            docxGroup.classList.add('disabled');
+            docxSelect.setAttribute('disabled', 'true');
+        }
         announce('Übersetzung deaktiviert.');
     }
+    saveSettings();
 });
 
 // ------------------------------------------------------------
@@ -109,6 +221,36 @@ window.addFileFromPython = function (filePath) {
 // Datei zur Queue hinzufügen
 // ------------------------------------------------------------
 function addFileToQueue(filePath) {
+    if (filePath.toLowerCase().endsWith('.adler')) {
+        if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.load_project_file(filePath).then(res => {
+                if (res && res.success) {
+                    let videoPath = res.video_path;
+                    if (!res.video_exists) {
+                        if (confirm("Das zugehörige Video wurde unter '" + videoPath + "' nicht gefunden.\nMöchten Sie das Video manuell verknüpfen?")) {
+                            window.pywebview.api.locate_video_file().then(newPath => {
+                                if (newPath) {
+                                    videoPath = newPath;
+                                    // Register in Python cache under the new path
+                                    window.pywebview.api.cache_project_segments(newPath, JSON.stringify(res.segments));
+                                    addLoadedProjectToQueue(filePath, videoPath, res.segments, res.cuts);
+                                }
+                            });
+                        }
+                    } else {
+                        addLoadedProjectToQueue(filePath, videoPath, res.segments, res.cuts);
+                    }
+                } else {
+                    alert("Fehler beim Laden des Projekts: " + (res ? res.error : 'Unbekannt'));
+                }
+            }).catch(err => {
+                console.error("Fehler beim Laden des Projekts:", err);
+                alert("Fehler beim Laden des Projekts.");
+            });
+        }
+        return;
+    }
+
     if (fileQueue.some(file => file.path === filePath)) return;
 
     const filename = filePath.split('/').pop().split('\\').pop();
@@ -136,6 +278,44 @@ function addFileToQueue(filePath) {
             updateFileMetadata(filePath, { error: true });
         });
     }
+}
+
+function addLoadedProjectToQueue(projectPath, videoPath, segments, cuts) {
+    if (fileQueue.some(file => file.path === videoPath)) {
+        alert("Dieses Video befindet sich bereits in der Warteschlange.");
+        return;
+    }
+
+    const filename = videoPath.split('/').pop().split('\\').pop();
+    const newFile = {
+        path: videoPath,
+        name: filename,
+        duration: 'Wird geladen…',
+        creationDate: 'Wird geladen…',
+        location: 'Wird geladen…',
+        mapsLink: null,
+        status: 'completed',
+        progress: 100,
+        statusMsg: 'Projekt geladen',
+        segments: segments,
+        cuts: cuts || []
+    };
+
+    fileQueue.push(newFile);
+    renderQueue();
+    updateStartButtonState();
+
+    if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.get_file_metadata(videoPath).then(meta => {
+            updateFileMetadata(videoPath, meta);
+        }).catch(err => {
+            console.error('Fehler beim Laden der Metadaten:', err);
+            updateFileMetadata(videoPath, { error: true });
+        });
+    }
+
+    announce(`Projekt für ${filename} erfolgreich geladen.`);
+    openDetailPanel(newFile);
 }
 
 // ------------------------------------------------------------
@@ -189,6 +369,21 @@ function renderQueue() {
     fileQueue.forEach(file => {
         const tr = document.createElement('tr');
 
+        // Clickable row for completed transcriptions
+        if (file.status === 'completed') {
+            tr.classList.add('clickable-row');
+            tr.setAttribute('tabindex', '0');
+            tr.setAttribute('role', 'button');
+            tr.setAttribute('aria-label', `${file.name}, fertig. Klicken zum Abspielen und Transkript anzeigen.`);
+            tr.addEventListener('click', () => openDetailPanel(file));
+            tr.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openDetailPanel(file);
+                }
+            });
+        }
+
         // Dateiname
         const tdName = document.createElement('td');
         tdName.className = 'filename-cell';
@@ -228,6 +423,10 @@ function renderQueue() {
 
         // Status
         const tdStatus = document.createElement('td');
+        const statusContainer = document.createElement('div');
+        statusContainer.className = 'status-cell-container';
+        tdStatus.appendChild(statusContainer);
+
         const badge = document.createElement('div');
         badge.className = `status-badge ${file.status}`;
 
@@ -238,7 +437,20 @@ function renderQueue() {
         else if (file.status === 'failed') statusText = 'Fehler';
 
         badge.textContent = statusText;
-        tdStatus.appendChild(badge);
+        statusContainer.appendChild(badge);
+
+        if (file.status === 'completed') {
+            const playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.className = 'btn-play-row';
+            playBtn.innerHTML = '<span aria-hidden="true">▶</span> Abspielen';
+            playBtn.setAttribute('aria-label', `Transkript und Player für ${file.name} öffnen`);
+            playBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openDetailPanel(file);
+            });
+            statusContainer.appendChild(playBtn);
+        }
 
         if (file.status === 'processing') {
             const barContainer = document.createElement('div');
@@ -252,14 +464,14 @@ function renderQueue() {
             fill.className = 'progress-bar-fill';
             fill.style.width = `${file.progress}%`;
             barContainer.appendChild(fill);
-            tdStatus.appendChild(barContainer);
+            statusContainer.appendChild(barContainer);
         }
 
         if (file.statusMsg && file.status !== 'queued') {
             const msgLabel = document.createElement('div');
             msgLabel.className = 'status-msg';
             msgLabel.textContent = file.statusMsg;
-            tdStatus.appendChild(msgLabel);
+            statusContainer.appendChild(msgLabel);
         }
 
         tr.appendChild(tdStatus);
@@ -306,10 +518,11 @@ startBtn.addEventListener('click', () => {
     const paths = fileQueue.map(f => f.path);
     if (window.pywebview && window.pywebview.api) {
         const outputDirType = document.getElementById('output-dir-type').value;
-    const customPath = customOutputPath;
-    const diarize = document.getElementById('diarization-enable').checked;
-    const speakerCount = document.getElementById('speaker-count').value;
-    window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount);
+        const customPath = customOutputPath;
+        const diarize = document.getElementById('diarization-enable').checked;
+        const speakerCount = document.getElementById('speaker-count').value;
+        const docxTransMode = document.getElementById('docx-trans-mode').value;
+        window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount, docxTransMode);
     }
 });
 
@@ -395,7 +608,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // ------------------------------------------------------------
 // Speicherort-Steuerung (Einstellungsmenü)
 // ------------------------------------------------------------
-let customOutputPath = '';
 const outputDirTypeSelect = document.getElementById('output-dir-type');
 const customPathContainer = document.getElementById('custom-path-container');
 const customPathInput = document.getElementById('custom-path-input');
@@ -408,6 +620,7 @@ if (outputDirTypeSelect && customPathContainer && customPathInput && selectCusto
         } else {
             customPathContainer.style.display = 'none';
         }
+        saveSettings();
     });
 
     selectCustomPathBtn.addEventListener('click', () => {
@@ -417,6 +630,7 @@ if (outputDirTypeSelect && customPathContainer && customPathInput && selectCusto
                     customOutputPath = path;
                     customPathInput.value = path;
                     announce(`Ausgewählter Speicherort: ${path}`);
+                    saveSettings();
                 }
             });
         }
@@ -441,6 +655,7 @@ if (diarizationEnableCheckbox && speakerCountWrapper && speakerCountSelect) {
             speakerCountSelect.setAttribute('disabled', 'true');
             announce('Sprechererkennung deaktiviert.');
         }
+        saveSettings();
     });
 }
 
@@ -478,3 +693,770 @@ if (openDrawerBtn && closeDrawerBtn && saveDrawerBtn && drawerOverlay && setting
         }
     });
 }
+
+// ------------------------------------------------------------
+// Schnittmarken (In/Out) State & Hilfsfunktionen
+// ------------------------------------------------------------
+let cutInTime = null;
+let cutOutTime = null;
+
+function formatSecondsForUI(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function setInPoint(time) {
+    if (cutOutTime !== null && time > cutOutTime) {
+        showCutMessage("IN-Punkt darf nicht nach dem OUT-Punkt liegen.", "error");
+        return;
+    }
+    cutInTime = time;
+    updateCutUIControls();
+    showCutMessage("IN-Punkt gesetzt auf " + formatSecondsForUI(time) + ". Klicken Sie '+ Schnitt hinzufügen' zum Speichern.", "success");
+    announce("IN-Punkt gesetzt auf " + formatSecondsForUI(time));
+}
+
+function setOutPoint(time) {
+    if (cutInTime !== null && time < cutInTime) {
+        showCutMessage("OUT-Punkt darf nicht vor dem IN-Punkt liegen.", "error");
+        return;
+    }
+    cutOutTime = time;
+    updateCutUIControls();
+    showCutMessage("OUT-Punkt gesetzt auf " + formatSecondsForUI(time) + ". Klicken Sie '+ Schnitt hinzufügen' zum Speichern.", "success");
+    announce("OUT-Punkt gesetzt auf " + formatSecondsForUI(time));
+}
+
+function addCut() {
+    if (cutInTime === null || cutOutTime === null) {
+        showCutMessage("Bitte zuerst IN- und OUT-Punkt setzen.", "error");
+        return;
+    }
+    if (cutInTime >= cutOutTime) {
+        showCutMessage("IN-Punkt muss vor OUT-Punkt liegen.", "error");
+        return;
+    }
+    if (!currentPlayingFile) return;
+
+    currentPlayingFile.cuts = currentPlayingFile.cuts || [];
+    
+    // Generiere eindeutige ID
+    const id = Date.now() + Math.random().toString(36).substr(2, 9);
+    currentPlayingFile.cuts.push({
+        id: id,
+        start: cutInTime,
+        end: cutOutTime
+    });
+
+    // Chronologisch sortieren
+    currentPlayingFile.cuts.sort((a, b) => a.start - b.start);
+
+    // Aktiven Bereich zurücksetzen
+    cutInTime = null;
+    cutOutTime = null;
+
+    renderCutList();
+    updateCutUIControls();
+    showCutMessage("Schnitt zur Liste hinzugefügt.", "success");
+    announce("Schnitt zur Liste hinzugefügt.");
+}
+
+function deleteCut(id) {
+    if (!currentPlayingFile || !currentPlayingFile.cuts) return;
+    currentPlayingFile.cuts = currentPlayingFile.cuts.filter(c => c.id !== id);
+    
+    renderCutList();
+    updateCutUIControls();
+    showCutMessage("Schnitt gelöscht.", "success");
+    announce("Schnitt gelöscht.");
+}
+
+function renderCutList() {
+    const container = document.getElementById('cut-list-container');
+    const countEl = document.getElementById('cut-list-count');
+    const totalEl = document.getElementById('cut-total-time');
+    
+    if (!container || !countEl || !totalEl) return;
+    
+    container.innerHTML = '';
+    
+    if (!currentPlayingFile || !currentPlayingFile.cuts || currentPlayingFile.cuts.length === 0) {
+        container.innerHTML = '<div class="empty-cut-text">Keine Schnitte in der Liste.</div>';
+        countEl.textContent = '0 Schnitte';
+        totalEl.textContent = '00:00:00';
+        return;
+    }
+    
+    const cuts = currentPlayingFile.cuts;
+    countEl.textContent = `${cuts.length} Schnitt${cuts.length === 1 ? '' : 'e'}`;
+    
+    let totalDuration = 0;
+    
+    cuts.forEach((cut, index) => {
+        const duration = cut.end - cut.start;
+        totalDuration += duration;
+        
+        const cutDiv = document.createElement('div');
+        cutDiv.className = 'cut-item';
+        cutDiv.setAttribute('title', 'Klicken, um zum Startzeitpunkt zu springen');
+        
+        cutDiv.addEventListener('click', () => {
+            const player = document.getElementById('media-player');
+            if (player) {
+                player.currentTime = cut.start;
+                player.play().catch(e => console.log('Autoplay blocked:', e));
+            }
+        });
+        
+        const infoSpan = document.createElement('span');
+        infoSpan.className = 'cut-item-info';
+        infoSpan.innerHTML = `<strong>#${index + 1}</strong> ${formatSecondsForUI(cut.start)} - ${formatSecondsForUI(cut.end)}`;
+        cutDiv.appendChild(infoSpan);
+        
+        const rightDiv = document.createElement('div');
+        rightDiv.className = 'detail-header-actions';
+        
+        const durSpan = document.createElement('span');
+        durSpan.className = 'cut-item-duration';
+        durSpan.textContent = `(${Math.round(duration)}s)`;
+        rightDiv.appendChild(durSpan);
+        
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn-delete-cut';
+        delBtn.innerHTML = '&times;';
+        delBtn.setAttribute('aria-label', `Schnitt ${index + 1} löschen`);
+        delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteCut(cut.id);
+        });
+        rightDiv.appendChild(delBtn);
+        
+        cutDiv.appendChild(rightDiv);
+        container.appendChild(cutDiv);
+    });
+    
+    totalEl.textContent = formatSecondsForUI(totalDuration);
+}
+
+function updateCutUIControls() {
+    const inEl = document.getElementById('cut-in-time');
+    const outEl = document.getElementById('cut-out-time');
+    if (!inEl || !outEl) return;
+
+    inEl.textContent = cutInTime !== null ? formatSecondsForUI(cutInTime) : '--:--:--';
+    outEl.textContent = cutOutTime !== null ? formatSecondsForUI(cutOutTime) : '--:--:--';
+
+    const segments = document.querySelectorAll('.transcript-segment');
+    segments.forEach((segDiv, idx) => {
+        if (!currentPlayingFile || !currentPlayingFile.segments) return;
+        const seg = currentPlayingFile.segments[idx];
+        if (!seg) return;
+
+        segDiv.classList.remove('in-cut-range', 'has-in-mark', 'has-out-mark');
+        
+        const existingBadges = segDiv.querySelectorAll('.badge-cut-in, .badge-cut-out');
+        existingBadges.forEach(b => b.remove());
+    });
+
+    if (!currentPlayingFile || !currentPlayingFile.segments) return;
+    const fileSegs = currentPlayingFile.segments;
+    const cuts = currentPlayingFile.cuts || [];
+    
+    // We compute which segments are inside a cut range and where the boundary marks are
+    const isInsideCutList = new Array(fileSegs.length).fill(false);
+    const boundaryLabelsMap = {};
+    for (let i = 0; i < fileSegs.length; i++) {
+        boundaryLabelsMap[i] = [];
+    }
+
+    // Process saved cuts
+    cuts.forEach((cut, cIdx) => {
+        const overlappingIndices = [];
+        fileSegs.forEach((seg, sIdx) => {
+            const segStart = seg.start;
+            const segEnd = seg.end;
+            if (segStart < cut.end && segEnd > cut.start) {
+                overlappingIndices.push(sIdx);
+                isInsideCutList[sIdx] = true;
+            }
+        });
+        if (overlappingIndices.length > 0) {
+            const inIdx = overlappingIndices[0];
+            const outIdx = overlappingIndices[overlappingIndices.length - 1];
+            boundaryLabelsMap[inIdx].push({ type: 'in', label: `IN #${cIdx + 1}` });
+            boundaryLabelsMap[outIdx].push({ type: 'out', label: `OUT #${cIdx + 1}` });
+        }
+    });
+
+    // Process active temporary cut
+    const activeInLabels = {};
+    const activeOutLabels = {};
+
+    if (cutInTime !== null && cutOutTime !== null) {
+        // Both are set: active range
+        const overlappingIndices = [];
+        fileSegs.forEach((seg, sIdx) => {
+            const segStart = seg.start;
+            const segEnd = seg.end;
+            if (segStart < cutOutTime && segEnd > cutInTime) {
+                overlappingIndices.push(sIdx);
+                isInsideCutList[sIdx] = true;
+            }
+        });
+        if (overlappingIndices.length > 0) {
+            const inIdx = overlappingIndices[0];
+            const outIdx = overlappingIndices[overlappingIndices.length - 1];
+            activeInLabels[inIdx] = 'IN';
+            activeOutLabels[outIdx] = 'OUT';
+        }
+    } else {
+        // Only one or none is set
+        if (cutInTime !== null) {
+            const idx = fileSegs.findIndex(seg => cutInTime >= seg.start && cutInTime < seg.end);
+            if (idx !== -1) {
+                activeInLabels[idx] = 'IN';
+            } else {
+                let minDiff = Infinity;
+                let closestIdx = -1;
+                fileSegs.forEach((seg, sIdx) => {
+                    const diff = Math.min(Math.abs(seg.start - cutInTime), Math.abs(seg.end - cutInTime));
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIdx = sIdx;
+                    }
+                });
+                if (closestIdx !== -1) {
+                    activeInLabels[closestIdx] = 'IN';
+                }
+            }
+        }
+        if (cutOutTime !== null) {
+            const idx = fileSegs.findIndex(seg => cutOutTime >= seg.start && cutOutTime < seg.end);
+            if (idx !== -1) {
+                activeOutLabels[idx] = 'OUT';
+            } else {
+                let minDiff = Infinity;
+                let closestIdx = -1;
+                fileSegs.forEach((seg, sIdx) => {
+                    const diff = Math.min(Math.abs(seg.start - cutOutTime), Math.abs(seg.end - cutOutTime));
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIdx = sIdx;
+                    }
+                });
+                if (closestIdx !== -1) {
+                    activeOutLabels[closestIdx] = 'OUT';
+                }
+            }
+        }
+    }
+
+    // Now apply classes and add badges to the actual DOM elements
+    segments.forEach((segDiv, idx) => {
+        const seg = fileSegs[idx];
+        if (!seg) return;
+
+        if (isInsideCutList[idx]) {
+            segDiv.classList.add('in-cut-range');
+        }
+
+        // Add saved badges
+        const bounds = boundaryLabelsMap[idx] || [];
+        bounds.forEach(b => {
+            segDiv.classList.add(b.type === 'in' ? 'has-in-mark' : 'has-out-mark');
+            const meta = segDiv.querySelector('.segment-meta');
+            if (meta) {
+                const badge = document.createElement('span');
+                badge.className = b.type === 'in' ? 'badge-cut-in' : 'badge-cut-out';
+                badge.textContent = b.label;
+                meta.appendChild(badge);
+            }
+        });
+
+        // Add active temporary badges
+        if (activeInLabels[idx]) {
+            segDiv.classList.add('has-in-mark');
+            const meta = segDiv.querySelector('.segment-meta');
+            if (meta) {
+                const badge = document.createElement('span');
+                badge.className = 'badge-cut-in';
+                badge.textContent = activeInLabels[idx];
+                meta.appendChild(badge);
+            }
+        }
+        if (activeOutLabels[idx]) {
+            segDiv.classList.add('has-out-mark');
+            const meta = segDiv.querySelector('.segment-meta');
+            if (meta) {
+                const badge = document.createElement('span');
+                badge.className = 'badge-cut-out';
+                badge.textContent = activeOutLabels[idx];
+                meta.appendChild(badge);
+            }
+        }
+    });
+}
+
+function showCutMessage(msg, type) {
+    const el = document.getElementById('cut-status-msg');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'cut-status-msg ' + type;
+    
+    if (type === 'success') {
+        setTimeout(() => {
+            if (el.textContent === msg) {
+                el.textContent = '';
+                el.className = 'cut-status-msg';
+            }
+        }, 5000);
+    }
+}
+
+// ------------------------------------------------------------
+// Player & Transkript Detailansicht Steuerung
+// ------------------------------------------------------------
+let currentPlayingFile = null;
+let currentTranscriptLanguage = 'both'; // 'both', 'original', 'translated'
+
+function openDetailPanel(file) {
+    const panel = document.getElementById('detail-panel');
+    if (!panel) return;
+
+    currentPlayingFile = file;
+    file.cuts = file.cuts || [];
+    cutInTime = null;
+    cutOutTime = null;
+    showCutMessage("", "");
+    
+    panel.classList.add('active');
+    panel.setAttribute('aria-hidden', 'false');
+    
+    // Kino-Modus standardmäßig zurücksetzen
+    panel.classList.remove('theater-mode');
+    const btnTheater = document.getElementById('btn-toggle-theater');
+    if (btnTheater) {
+        btnTheater.classList.remove('active');
+        btnTheater.textContent = "📽 Kino-Modus";
+    }
+    
+    renderCutList();
+    panel.setAttribute('aria-hidden', 'false');
+
+    // Linke Spalte schmaler machen
+    const leftCol = document.querySelector('.dashboard-left');
+    if (leftCol) {
+        leftCol.style.flex = '0 0 58%';
+    }
+
+    // Dateiname setzen
+    const nameEl = document.getElementById('detail-filename');
+    if (nameEl) {
+        nameEl.textContent = file.name;
+        nameEl.setAttribute('title', file.name);
+    }
+
+    // Lade-Status anzeigen
+    const listContainer = document.getElementById('transcript-segments-list');
+    if (listContainer) {
+        listContainer.innerHTML = '<div class="empty-text">Lade Transkript...</div>';
+    }
+
+        // Player initialisieren
+        const playerContainer = document.getElementById('media-player-container');
+        if (playerContainer) {
+            playerContainer.innerHTML = '';
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            const isVideo = ['mp4', 'mov', 'mkv', 'webm'].includes(ext);
+
+            const player = document.createElement(isVideo ? 'video' : 'audio');
+            player.id = 'media-player';
+            player.controls = true;
+            player.preload = 'metadata';
+            
+            // Set up local web server URL or fall back to file:///
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.get_server_config().then(config => {
+                    const encodedPath = encodeURIComponent(file.path);
+                    player.src = `http://127.0.0.1:${config.port}/media?token=${config.token}&path=${encodedPath}`;
+                }).catch(err => {
+                    console.error("Fehler beim Abrufen der Server-Konfiguration:", err);
+                    player.src = 'file:///' + encodeURI(file.path.replace(/\\/g, '/'));
+                });
+            } else {
+                player.src = 'file:///' + encodeURI(file.path.replace(/\\/g, '/'));
+            }
+            playerContainer.appendChild(player);
+
+        // Transkript abrufen aus Python Cache
+        if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.get_transcript(file.path).then(segments => {
+                if (!segments || segments.length === 0) {
+                    if (listContainer) {
+                        listContainer.innerHTML = '<div class="empty-text">Kein Transkript verfügbar.</div>';
+                    }
+                    return;
+                }
+
+                file.segments = segments;
+                renderTranscriptSegments(file);
+                setupPlayerSync(player, segments);
+            }).catch(err => {
+                console.error('Fehler beim Laden des Transkripts:', err);
+                if (listContainer) {
+                    listContainer.innerHTML = '<div class="empty-text">Fehler beim Laden des Transkripts.</div>';
+                }
+            });
+        } else {
+            // Fallback
+            if (listContainer) {
+                listContainer.innerHTML = '<div class="empty-text">Kein Transkript geladen (außerhalb der App).</div>';
+            }
+        }
+    }
+}
+
+function closeDetailPanel() {
+    const panel = document.getElementById('detail-panel');
+    if (!panel) return;
+
+    // Layout zurücksetzen
+    const leftCol = document.querySelector('.dashboard-left');
+    if (leftCol) {
+        leftCol.style.flex = '1';
+    }
+
+    panel.classList.remove('active');
+    panel.classList.remove('theater-mode');
+    
+    const btnTheater = document.getElementById('btn-toggle-theater');
+    if (btnTheater) {
+        btnTheater.classList.remove('active');
+        btnTheater.textContent = "📽 Kino-Modus";
+    }
+    panel.setAttribute('aria-hidden', 'true');
+
+    // Player stoppen
+    const player = document.getElementById('media-player');
+    if (player) {
+        player.pause();
+        player.src = '';
+    }
+
+    currentPlayingFile = null;
+}
+
+function renderTranscriptSegments(file) {
+    const listContainer = document.getElementById('transcript-segments-list');
+    if (!listContainer || !file.segments) return;
+
+    listContainer.innerHTML = '';
+    
+    const hasTranslation = file.segments.some(seg => seg.translated);
+    const langToggle = document.getElementById('lang-toggle-container');
+    
+    if (langToggle) {
+        langToggle.style.display = hasTranslation ? 'flex' : 'none';
+    }
+
+    file.segments.forEach((seg, idx) => {
+        const segDiv = document.createElement('div');
+        segDiv.className = 'transcript-segment';
+        segDiv.id = `segment-${idx}`;
+        segDiv.setAttribute('tabindex', '0');
+        segDiv.setAttribute('role', 'button');
+        segDiv.setAttribute('aria-label', `Segment ${idx + 1} ab ${seg.start_str}. Sprecher: ${seg.speaker || 'Unbekannt'}.`);
+        
+        // Metadaten
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'segment-meta';
+        
+        const timestampSpan = document.createElement('span');
+        timestampSpan.className = 'segment-timestamp';
+        timestampSpan.textContent = seg.start_str;
+        metaDiv.appendChild(timestampSpan);
+
+        if (seg.speaker) {
+            const speakerSpan = document.createElement('span');
+            speakerSpan.className = 'segment-speaker';
+            speakerSpan.textContent = seg.speaker;
+            metaDiv.appendChild(speakerSpan);
+        }
+        
+        segDiv.appendChild(metaDiv);
+
+        // Text
+        const textDiv = document.createElement('div');
+        textDiv.className = 'segment-text';
+
+        if (currentTranscriptLanguage === 'original' || !hasTranslation) {
+            textDiv.textContent = seg.original;
+        } else if (currentTranscriptLanguage === 'translated') {
+            textDiv.textContent = seg.translated || seg.original;
+        } else {
+            // Beide anzeigen
+            const origSpan = document.createElement('div');
+            origSpan.className = 'text-orig';
+            origSpan.textContent = seg.original;
+            textDiv.appendChild(origSpan);
+
+            if (seg.translated) {
+                const transSpan = document.createElement('div');
+                transSpan.className = 'segment-text translated';
+                transSpan.textContent = seg.translated;
+                textDiv.appendChild(transSpan);
+            }
+        }
+        
+        segDiv.appendChild(textDiv);
+
+        // Klick sucht im Video/Audio
+        const seekHandler = () => {
+            const player = document.getElementById('media-player');
+            if (player) {
+                player.currentTime = seg.start;
+                player.play().catch(e => console.log('Autoplay blocked:', e));
+            }
+        };
+
+        segDiv.addEventListener('click', seekHandler);
+        segDiv.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                seekHandler();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setInPoint(seg.start);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                setOutPoint(seg.end);
+            }
+        });
+
+        listContainer.appendChild(segDiv);
+    });
+
+    // Highlights und Badges fuer Schnittmarken aktualisieren
+    updateCutUIControls();
+}
+
+function setupPlayerSync(player, segments) {
+    let lastActiveIdx = -1;
+
+    player.addEventListener('timeupdate', () => {
+        const time = player.currentTime;
+        const activeIdx = segments.findIndex(seg => time >= seg.start && time <= seg.end);
+        
+        if (activeIdx !== lastActiveIdx) {
+            if (lastActiveIdx !== -1) {
+                const prevEl = document.getElementById(`segment-${lastActiveIdx}`);
+                if (prevEl) prevEl.classList.remove('active');
+            }
+            
+            if (activeIdx !== -1) {
+                const activeEl = document.getElementById(`segment-${activeIdx}`);
+                if (activeEl) {
+                    activeEl.classList.add('active');
+                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+            
+            lastActiveIdx = activeIdx;
+        }
+    });
+}
+
+// Binden von Event Listeners für Details Panel
+document.addEventListener('DOMContentLoaded', () => {
+    // Einstellungen laden
+    loadSettings();
+
+    // Listeners for setting changes
+    const idsToSave = ['source-lang', 'target-lang', 'model-size', 'output-dir-type', 'diarization-enable', 'speaker-count', 'docx-trans-mode'];
+    idsToSave.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', saveSettings);
+        }
+    });
+
+    // Sidebar Ein-/Ausblenden
+    const btnCollapse = document.getElementById('btn-collapse-sidebar');
+    const btnExpand = document.getElementById('btn-expand-sidebar');
+    const appContainer = document.querySelector('.app-container');
+    
+    if (btnCollapse && btnExpand && appContainer) {
+        btnCollapse.addEventListener('click', () => {
+            appContainer.classList.add('sidebar-collapsed');
+            announce("Einstellungen ausgeblendet.");
+        });
+        btnExpand.addEventListener('click', () => {
+            appContainer.classList.remove('sidebar-collapsed');
+            announce("Einstellungen eingeblendet.");
+        });
+    }
+
+    // Kino-Modus Umschalten
+    const btnTheater = document.getElementById('btn-toggle-theater');
+    const detailPanel = document.getElementById('detail-panel');
+    if (btnTheater && detailPanel) {
+        btnTheater.addEventListener('click', () => {
+            const isActive = detailPanel.classList.toggle('theater-mode');
+            btnTheater.classList.toggle('active', isActive);
+            btnTheater.textContent = isActive ? "📽 Standard" : "📽 Kino-Modus";
+            announce(isActive ? "Kino-Modus aktiviert." : "Standard-Modus aktiviert.");
+        });
+    }
+
+    const closeDetailBtn = document.getElementById('close-detail-btn');
+    if (closeDetailBtn) {
+        closeDetailBtn.addEventListener('click', closeDetailPanel);
+    }
+
+    // Schnittmarken Buttons
+    const btnIn = document.getElementById('btn-set-in');
+    const btnOut = document.getElementById('btn-set-out');
+    const btnAddCut = document.getElementById('btn-add-cut');
+    const btnClear = document.getElementById('btn-clear-cut');
+    const btnSaveProject = document.getElementById('btn-save-project');
+    const btnUpdate = document.getElementById('btn-update-docx');
+    
+    if (btnIn) {
+        btnIn.addEventListener('click', () => {
+            const player = document.getElementById('media-player');
+            if (player) {
+                setInPoint(player.currentTime);
+            }
+        });
+    }
+    if (btnOut) {
+        btnOut.addEventListener('click', () => {
+            const player = document.getElementById('media-player');
+            if (player) {
+                setOutPoint(player.currentTime);
+            }
+        });
+    }
+    if (btnAddCut) {
+        btnAddCut.addEventListener('click', addCut);
+    }
+    if (btnClear) {
+        btnClear.addEventListener('click', () => {
+            cutInTime = null;
+            cutOutTime = null;
+            if (currentPlayingFile) {
+                currentPlayingFile.cuts = [];
+            }
+            renderCutList();
+            updateCutUIControls();
+            showCutMessage("Alle Schnitte gelöscht.", "success");
+            announce("Alle Schnitte gelöscht.");
+        });
+    }
+    if (btnSaveProject) {
+        btnSaveProject.addEventListener('click', () => {
+            if (!currentPlayingFile) return;
+            const segments = currentPlayingFile.segments || [];
+            const cuts = currentPlayingFile.cuts || [];
+            
+            showCutMessage("Projekt wird gespeichert...", "");
+            
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.save_project_file(
+                    currentPlayingFile.path,
+                    JSON.stringify(segments),
+                    JSON.stringify(cuts)
+                ).then(result => {
+                    if (result && result.success) {
+                        showCutMessage(`Projekt gespeichert: ${result.filename}`, "success");
+                        announce(`Projekt erfolgreich gespeichert unter ${result.filename}`);
+                    } else {
+                        showCutMessage(`Fehler beim Speichern: ${result.error || 'Abgebrochen'}`, "error");
+                    }
+                }).catch(err => {
+                    console.error("Fehler bei save_project_file:", err);
+                    showCutMessage("Fehler beim Aufruf der Python-API.", "error");
+                });
+            } else {
+                showCutMessage("Fehler: Keine App-Verbindung verfügbar.", "error");
+            }
+        });
+    }
+    if (btnUpdate) {
+        btnUpdate.addEventListener('click', () => {
+            if (!currentPlayingFile) return;
+            const cuts = currentPlayingFile.cuts || [];
+            if (cuts.length === 0) {
+                showCutMessage("Die Schnittliste ist leer. Bitte fügen Sie Schnitte hinzu.", "error");
+                return;
+            }
+            
+            showCutMessage("Aktualisiere Word-Dokument...", "");
+            
+            if (window.pywebview && window.pywebview.api) {
+                const outputDirType = document.getElementById('output-dir-type').value;
+                const customPath = customOutputPath;
+                const targetLang = translateEnableCheckbox.checked ? targetLangSelect.value : null;
+                const docxTransMode = document.getElementById('docx-trans-mode').value;
+
+                // Sende Array von [start, end] an Python
+                const cutsData = cuts.map(c => [c.start, c.end]);
+
+                window.pywebview.api.update_docx_with_cuts(
+                    currentPlayingFile.path, 
+                    JSON.stringify(cutsData), // Als JSON stringifiziert
+                    outputDirType, 
+                    customPath, 
+                    targetLang,
+                    docxTransMode
+                ).then(result => {
+                    if (result && result.success) {
+                        showCutMessage(`Erfolgreich erstellt: ${result.filename}`, "success");
+                        announce(`Word-Dokument erfolgreich aktualisiert unter ${result.filename}`);
+                    } else {
+                        showCutMessage(`Fehler: ${result.error || 'Unbekannt'}`, "error");
+                    }
+                }).catch(err => {
+                    console.error("Fehler bei update_docx_with_cuts:", err);
+                    showCutMessage("Fehler beim Aufruf der Python-API.", "error");
+                });
+            } else {
+                showCutMessage("Fehler: Keine App-Verbindung verfügbar.", "error");
+            }
+        });
+    }
+
+    const showBothBtn = document.getElementById('show-both-btn');
+    const showOriginalBtn = document.getElementById('show-original-btn');
+    const showTranslatedBtn = document.getElementById('show-translated-btn');
+
+    if (showBothBtn && showOriginalBtn && showTranslatedBtn) {
+        showBothBtn.addEventListener('click', () => {
+            currentTranscriptLanguage = 'both';
+            showBothBtn.classList.add('active');
+            showOriginalBtn.classList.remove('active');
+            showTranslatedBtn.classList.remove('active');
+            if (currentPlayingFile) renderTranscriptSegments(currentPlayingFile);
+        });
+
+        showOriginalBtn.addEventListener('click', () => {
+            currentTranscriptLanguage = 'original';
+            showBothBtn.classList.remove('active');
+            showOriginalBtn.classList.add('active');
+            showTranslatedBtn.classList.remove('active');
+            if (currentPlayingFile) renderTranscriptSegments(currentPlayingFile);
+        });
+
+        showTranslatedBtn.addEventListener('click', () => {
+            currentTranscriptLanguage = 'translated';
+            showBothBtn.classList.remove('active');
+            showOriginalBtn.classList.remove('active');
+            showTranslatedBtn.classList.add('active');
+            if (currentPlayingFile) renderTranscriptSegments(currentPlayingFile);
+        });
+    }
+});

@@ -22,6 +22,7 @@
             <div class="brand">
                 <span class="logo-icon" aria-hidden="true">🦅</span>
                 <h1>Transcription Adler</h1>
+                <button id="btn-collapse-sidebar" type="button" class="sidebar-toggle-btn" title="Einstellungen ausblenden" aria-label="Einstellungen ausblenden">◀</button>
             </div>
 
             <div class="settings-header">
@@ -92,64 +93,135 @@
 
         <!-- Hauptbereich -->
         <main class="dashboard" id="main-content" tabindex="-1">
-            <h2 class="visually-hidden-heading">Dateiverarbeitung</h2>
+            <button id="btn-expand-sidebar" type="button" class="sidebar-toggle-btn expand-btn" title="Einstellungen einblenden" aria-label="Einstellungen einblenden">▶</button>
+            <div class="dashboard-layout">
+                <!-- Linke Spalte: Dropzone und Warteschlange -->
+                <div class="dashboard-left">
+                    <h2 class="visually-hidden-heading">Dateiverarbeitung</h2>
 
-            <!-- Drag-and-Drop-Zone -->
-            <section class="drop-zone-container" aria-labelledby="drop-heading">
-                <div id="drop-zone"
-                     class="drop-zone"
-                     role="region"
-                     aria-labelledby="drop-heading"
-                     aria-describedby="drop-instructions">
-                    <span class="drop-icon" aria-hidden="true">📁</span>
-                    <h3 id="drop-heading">Video- und Audiodateien hinzufügen</h3>
-                    <p id="drop-instructions" class="drop-subtext">
-                        Dateien hier ablegen oder Schaltfläche unten verwenden.
-                        Dateien werden nicht kopiert, sondern bleiben am Originalort.
-                    </p>
-                    <button id="browse-btn" type="button" class="btn btn-secondary">
-                        Dateien auswählen
-                    </button>
-                </div>
-            </section>
+                    <!-- Drag-and-Drop-Zone -->
+                    <section class="drop-zone-container" aria-labelledby="drop-heading">
+                        <div id="drop-zone"
+                             class="drop-zone"
+                             role="region"
+                             aria-labelledby="drop-heading"
+                             aria-describedby="drop-instructions">
+                            <span class="drop-icon" aria-hidden="true">📁</span>
+                            <h3 id="drop-heading">Video- und Audiodateien hinzufügen</h3>
+                            <p id="drop-instructions" class="drop-subtext">
+                                Dateien hier ablegen oder Schaltfläche unten verwenden.
+                                Dateien werden nicht kopiert, sondern bleiben am Originalort.
+                            </p>
+                            <button id="browse-btn" type="button" class="btn btn-secondary">
+                                Dateien auswählen
+                            </button>
+                        </div>
+                    </section>
 
-            <!-- Warteschlange -->
-            <section class="queue-container" aria-labelledby="queue-heading">
-                <div class="queue-header">
-                    <h2 id="queue-heading">Warteschlange</h2>
-                    <span id="queue-count" class="badge" aria-live="polite">0 Dateien</span>
-                    <button id="clear-btn"
-                            type="button"
-                            class="btn btn-link"
-                            hidden>
-                        Liste leeren
-                    </button>
+                    <!-- Warteschlange -->
+                    <section class="queue-container" aria-labelledby="queue-heading">
+                        <div class="queue-header">
+                            <h2 id="queue-heading">Warteschlange</h2>
+                            <span id="queue-count" class="badge" aria-live="polite">0 Dateien</span>
+                            <button id="clear-btn"
+                                    type="button"
+                                    class="btn btn-link"
+                                    hidden>
+                                Liste leeren
+                            </button>
+                        </div>
+
+                        <div class="queue-list-wrapper" role="region" aria-labelledby="queue-heading" tabindex="0">
+                            <table class="queue-table">
+                                <caption class="sr-only">
+                                    Liste aller hinzugefügten Dateien mit Metadaten und Verarbeitungsstatus.
+                                </caption>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Dateiname</th>
+                                        <th scope="col">Dauer</th>
+                                        <th scope="col">Erstellungsdatum</th>
+                                        <th scope="col">Aufnahmeort</th>
+                                        <th scope="col">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="queue-tbody">
+                                    <tr id="empty-state">
+                                        <td colspan="5" class="empty-text">
+                                            Keine Dateien in der Warteschlange. Dateien zum oberen Bereich hinzufügen, um zu beginnen.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
                 </div>
 
-                <div class="queue-list-wrapper" role="region" aria-labelledby="queue-heading" tabindex="0">
-                    <table class="queue-table">
-                        <caption class="sr-only">
-                            Liste aller hinzugefügten Dateien mit Metadaten und Verarbeitungsstatus.
-                        </caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">Dateiname</th>
-                                <th scope="col">Dauer</th>
-                                <th scope="col">Erstellungsdatum</th>
-                                <th scope="col">Aufnahmeort</th>
-                                <th scope="col">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="queue-tbody">
-                            <tr id="empty-state">
-                                <td colspan="5" class="empty-text">
-                                    Keine Dateien in der Warteschlange. Dateien zum oberen Bereich hinzufügen, um zu beginnen.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <!-- Rechte Spalte: Player & Transkript Detailansicht -->
+                <div class="dashboard-right" id="detail-panel" aria-hidden="true">
+                    <div class="detail-header">
+                        <h3 id="detail-filename">Dateiname</h3>
+                        <div class="detail-header-actions">
+                            <button id="btn-toggle-theater" type="button" class="btn-theater-toggle" title="Kino-Modus umschalten">📽 Kino-Modus</button>
+                            <button id="close-detail-btn" type="button" class="btn-close-drawer" aria-label="Detailansicht schließen">&times;</button>
+                        </div>
+                    </div>
+                    <div class="detail-body">
+                        <!-- Linke Spalte in Details (Player & Schnittliste) -->
+                        <div class="detail-player-col">
+                            <div id="media-player-container">
+                                <!-- Audio/Video element will be injected here -->
+                            </div>
+                            <div class="cut-controls-container" aria-label="Schnittmarken Steuerung">
+                                <div class="cut-header">Schnittmarken (In / Out)</div>
+                                <div class="cut-times">
+                                    <div class="cut-time-item">
+                                        <span class="cut-label">IN-Punkt (◀):</span>
+                                        <span id="cut-in-time" class="cut-time-value">--:--:--</span>
+                                        <button id="btn-set-in" class="btn btn-cut" type="button" title="In-Marke auf aktuelle Position setzen">In</button>
+                                    </div>
+                                    <div class="cut-time-item">
+                                        <span class="cut-label">OUT-Punkt (▶):</span>
+                                        <span id="cut-out-time" class="cut-time-value">--:--:--</span>
+                                        <button id="btn-set-out" class="btn btn-cut" type="button" title="Out-Marke auf aktuelle Position setzen">Out</button>
+                                    </div>
+                                </div>
+                                <div class="cut-list-actions-row">
+                                    <button id="btn-add-cut" class="btn btn-primary-small btn-add-cut" type="button" title="Aktuellen In/Out-Bereich zur Schnittliste hinzufügen">+ Schnitt hinzufügen</button>
+                                </div>
+                                <div class="cut-list-wrapper">
+                                    <div class="cut-list-title">Schnittliste (<span id="cut-list-count">0 Schnitte</span>)</div>
+                                    <div id="cut-list-container" class="cut-list-container">
+                                        <div class="empty-cut-text">Keine Schnitte in der Liste.</div>
+                                    </div>
+                                    <div class="cut-total-duration">Gesamtdauer: <span id="cut-total-time">00:00:00</span></div>
+                                </div>
+                                <div class="cut-actions">
+                                    <button id="btn-clear-cut" class="btn btn-secondary-small" type="button" title="Alle Schnittmarken und Liste zurücksetzen">Zurücksetzen</button>
+                                    <button id="btn-save-project" class="btn btn-secondary-small" type="button" title="Projekt speichern (inkl. Transkript & Schnittmarken)">Projekt speichern</button>
+                                    <button id="btn-update-docx" class="btn btn-primary-small" type="button" title="Word-Bericht mit allen Schnittmarken aktualisieren">Bericht aktualisieren</button>
+                                </div>
+                                <div id="cut-status-msg" class="cut-status-msg" role="status" aria-live="polite"></div>
+                            </div>
+                        </div>
+
+                        <!-- Rechte Spalte in Details (Transkript) -->
+                        <div class="detail-transcript-col">
+                            <div class="transcript-header">
+                                <h4>Transkript</h4>
+                                <div class="lang-toggle-container" id="lang-toggle-container" style="display:none;">
+                                    <button id="show-both-btn" class="btn btn-lang active">Beide</button>
+                                    <button id="show-original-btn" class="btn btn-lang">Original</button>
+                                    <button id="show-translated-btn" class="btn btn-lang">Übersetzung</button>
+                                </div>
+                            </div>
+                            <div id="transcript-segments-list" class="transcript-segments-list">
+                                <!-- Segments list will be injected here -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </section>
+            </div>
         </main>
     </div>
 
@@ -256,6 +328,20 @@
                             Ordner wählen
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Übersetzungslayout im Bericht -->
+            <div class="setting-group disabled" id="docx-trans-mode-group">
+                <label for="docx-trans-mode">Übersetzung im Word-Bericht</label>
+                <p id="docx-trans-mode-help" class="setting-help">
+                    Wählen Sie, ob im Word-Dokument Original und Übersetzung oder nur die Übersetzung angezeigt wird.
+                </p>
+                <div class="select-wrapper">
+                    <select id="docx-trans-mode" disabled aria-describedby="docx-trans-mode-help">
+                        <option value="both" selected>Beide Sprachen (Spalten nebeneinander)</option>
+                        <option value="translated">Nur Übersetzung</option>
+                    </select>
                 </div>
             </div>
 

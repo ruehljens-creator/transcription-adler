@@ -58,7 +58,15 @@ def add_hyperlink(paragraph, text, url, color="4F46E5", underline=True):
     paragraph._p.append(hyperlink)
     return hyperlink
 
-def create_docx(output_path, metadata, segments, target_lang=None):
+def format_seconds(seconds):
+    if seconds is None:
+        return ""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+def create_docx(output_path, metadata, segments, target_lang=None, cuts=None, docx_trans_mode="both"):
     """
     Creates a styled Word Document (.docx) for the transcribed clip.
     """
@@ -96,16 +104,11 @@ def create_docx(output_path, metadata, segments, target_lang=None):
     sub_run.font.color.rgb = RGBColor(0x64, 0x74, 0x8B) # Slate 500
 
     # Metadata Grid (built as a borderless styled table)
-    meta_table = doc.add_table(rows=4, cols=2)
+    has_cuts = (cuts is not None and len(cuts) > 0)
+    rows_count = 5 if has_cuts else 4
+    meta_table = doc.add_table(rows=rows_count, cols=2)
     meta_table.alignment = WD_TABLE_ALIGNMENT.LEFT
     meta_table.autofit = False
-    
-    labels = [
-        "Dateiname:",
-        "Dauer:",
-        "Erstellungsdatum:",
-        "Ort (Metadaten):"
-    ]
     
     # Values parsing
     loc_str = "Keine GPS-Metadaten vorhanden"
@@ -114,12 +117,36 @@ def create_docx(output_path, metadata, segments, target_lang=None):
         loc_str = metadata['gps'].get('address', metadata['gps']['formatted'])
         maps_link = metadata.get('maps_link')
 
-    values = [
-        metadata['clip_name'],
-        metadata['duration_str'],
-        metadata['creation_date'],
-        loc_str
-    ]
+    if has_cuts:
+        total_duration = sum(end - start for start, end in cuts)
+        cuts_summary = f"{len(cuts)} Schnitte (Gesamtdauer: {format_seconds(total_duration)})"
+        labels = [
+            "Dateiname:",
+            "Dauer:",
+            "Erstellungsdatum:",
+            "Schnittliste:",
+            "Ort (Metadaten):"
+        ]
+        values = [
+            metadata['clip_name'],
+            metadata['duration_str'],
+            metadata['creation_date'],
+            cuts_summary,
+            loc_str
+        ]
+    else:
+        labels = [
+            "Dateiname:",
+            "Dauer:",
+            "Erstellungsdatum:",
+            "Ort (Metadaten):"
+        ]
+        values = [
+            metadata['clip_name'],
+            metadata['duration_str'],
+            metadata['creation_date'],
+            loc_str
+        ]
 
     for idx, (label, val) in enumerate(zip(labels, values)):
         row = meta_table.rows[idx]
@@ -139,7 +166,8 @@ def create_docx(output_path, metadata, segments, target_lang=None):
         p_val = cell_val.paragraphs[0]
         p_val.paragraph_format.space_after = Pt(4)
         
-        if idx == 3 and maps_link:
+        ort_idx = 4 if has_cuts else 3
+        if idx == ort_idx and maps_link:
             # Add address text first
             p_val.add_run(val + " ")
             # Add Hyperlink
@@ -161,12 +189,17 @@ def create_docx(output_path, metadata, segments, target_lang=None):
     heading_run.font.color.rgb = RGBColor(0x1E, 0x29, 0x3B) # Slate 800
 
     # Segments Table
-    has_translation = any(seg.get('translated') for seg in segments)
+    has_translation = any(seg.get('translated') for seg in segments) and (target_lang is not None)
     
     if has_translation:
-        cols = 3
-        headers = ["Zeitstempel", "Originaltext", f"Übersetzung ({target_lang.upper()})"]
-        col_widths = [Inches(1.2), Inches(2.65), Inches(2.65)]
+        if docx_trans_mode == "translated":
+            cols = 2
+            headers = ["Zeitstempel", f"Übersetzung ({target_lang.upper()})"]
+            col_widths = [Inches(1.2), Inches(5.3)]
+        else:
+            cols = 3
+            headers = ["Zeitstempel", "Originaltext", f"Übersetzung ({target_lang.upper()})"]
+            col_widths = [Inches(1.2), Inches(2.65), Inches(2.65)]
     else:
         cols = 2
         headers = ["Zeitstempel", "Inhalt / Transkription"]
@@ -189,21 +222,55 @@ def create_docx(output_path, metadata, segments, target_lang=None):
         run.bold = True
         run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF) # White
 
+    # Precompute overlapping cut indices and boundary labels for each segment
+    is_inside_cut_list = [False] * len(segments)
+    boundary_labels_map = {i: [] for i in range(len(segments))}
+    
+    if cuts is not None and len(cuts) > 0:
+        for c_idx, (cut_start, cut_end) in enumerate(cuts):
+            overlapping_indices = []
+            for s_idx, seg in enumerate(segments):
+                seg_start = seg.get('start', 0.0)
+                seg_end = seg.get('end', 0.0)
+                # Overlap check
+                if seg_start < cut_end and seg_end > cut_start:
+                    overlapping_indices.append(s_idx)
+                    is_inside_cut_list[s_idx] = True
+            
+            if overlapping_indices:
+                in_idx = overlapping_indices[0]
+                out_idx = overlapping_indices[-1]
+                boundary_labels_map[in_idx].append(f"IN #{c_idx + 1}")
+                boundary_labels_map[out_idx].append(f"OUT #{c_idx + 1}")
+
     # Data Rows
     for r_idx, seg in enumerate(segments):
         row = table.add_row()
         row_cells = row.cells
         
-        # Alternating row background for readability
-        bg_color = "F8FAFC" if r_idx % 2 == 1 else "FFFFFF"
+        # Determine background color and boundaries for Schnittmarken
+        is_inside_cut = is_inside_cut_list[r_idx]
+        boundary_labels = boundary_labels_map[r_idx]
+            
+        if is_inside_cut:
+            bg_color = "E2F0D9"  # Soft light green for cut range
+        else:
+            bg_color = "F8FAFC" if r_idx % 2 == 1 else "FFFFFF"
         
         # Content mapping
-        time_text = f"[{seg['start_str']} - {seg['end_str']}]"
+        time_prefix = ""
+        if len(boundary_labels) > 0:
+            time_prefix = f"[{', '.join(boundary_labels)}] "
+                
+        time_text = f"{time_prefix}[{seg['start_str']} - {seg['end_str']}]"
         if seg.get('speaker'):
             time_text += f"\n{seg['speaker']}"
         
         if has_translation:
-            row_data = [time_text, seg['original'], seg['translated']]
+            if docx_trans_mode == "translated":
+                row_data = [time_text, seg.get('translated', seg['original'])]
+            else:
+                row_data = [time_text, seg['original'], seg.get('translated', seg['original'])]
         else:
             row_data = [time_text, seg['original']]
             
@@ -219,7 +286,11 @@ def create_docx(output_path, metadata, segments, target_lang=None):
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = p.add_run(text)
                 run.font.size = Pt(9.5)
-                run.font.color.rgb = RGBColor(0x64, 0x74, 0x8B) # Slate 500
+                if len(boundary_labels) > 0:
+                    run.bold = True
+                    run.font.color.rgb = RGBColor(0x2E, 0x7D, 0x32) # Dark green
+                else:
+                    run.font.color.rgb = RGBColor(0x64, 0x74, 0x8B) # Slate 500
             else:
                 p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                 run = p.add_run(text)
@@ -244,7 +315,10 @@ if __name__ == '__main__':
         'maps_link': 'https://www.google.com/maps/search/?api=1&query=52.52,13.405'
     }
     test_segments = [
-        {'start_str': '00:00:00', 'end_str': '00:00:05', 'original': 'Hallo Welt, das ist eine Testaufnahme.', 'translated': 'Hello world, this is a test recording.'},
-        {'start_str': '00:00:05', 'end_str': '00:00:12', 'original': 'Wir analysieren GPS Metadaten und transkribieren Audio offline.', 'translated': 'We analyze GPS metadata and transcribe audio offline.'}
+        {'start': 0.0, 'end': 5.0, 'start_str': '00:00:00', 'end_str': '00:00:05', 'original': 'Hallo Welt, das ist eine Testaufnahme.', 'translated': 'Hello world, this is a test recording.'},
+        {'start': 5.0, 'end': 12.0, 'start_str': '00:00:05', 'end_str': '00:00:12', 'original': 'Wir analysieren GPS Metadaten und transkribieren Audio offline.', 'translated': 'We analyze GPS metadata and transcribe audio offline.'}
     ]
-    create_docx('test_output.docx', test_meta, test_segments, 'en')
+    # Test with a cut that overlaps both segments (2.5s to 8.0s)
+    create_docx('test_output.docx', test_meta, test_segments, 'en', cuts=[[2.5, 8.0]])
+    create_docx('test_translated_only.docx', test_meta, test_segments, 'en', cuts=[[2.5, 8.0]], docx_trans_mode='translated')
+

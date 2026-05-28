@@ -222,6 +222,7 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
     if progress_callback:
         progress_callback(75, f"Transkription fertig (Sprache: {detected_lang}). Verarbeite Segmente...")
         
+    total_segments = len(raw_segments)
     processed_segments = []
     
     # Check if translation is needed and it's not Whisper's native translation to English
@@ -236,7 +237,6 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
         except Exception as e:
             print(f"Fehler beim Initialisieren von GoogleTranslator: {e}")
             
-        total_segments = len(raw_segments)
     for i, seg in enumerate(raw_segments):
         start = seg["start"]
         end = seg["end"]
