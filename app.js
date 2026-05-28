@@ -300,7 +300,9 @@ startBtn.addEventListener('click', () => {
     if (window.pywebview && window.pywebview.api) {
         const outputDirType = document.getElementById('output-dir-type').value;
     const customPath = customOutputPath;
-    window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath);
+    const diarize = document.getElementById('diarization-enable').checked;
+    const speakerCount = document.getElementById('speaker-count').value;
+    window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount);
     }
 });
 
@@ -410,6 +412,27 @@ if (outputDirTypeSelect && customPathContainer && customPathInput && selectCusto
                     announce(`Ausgewählter Speicherort: ${path}`);
                 }
             });
+        }
+    });
+}
+
+// ------------------------------------------------------------
+// Sprechererkennungs-Steuerung (Einstellungsmenü)
+// ------------------------------------------------------------
+const diarizationEnableCheckbox = document.getElementById('diarization-enable');
+const speakerCountWrapper = document.getElementById('speaker-count-wrapper');
+const speakerCountSelect = document.getElementById('speaker-count');
+
+if (diarizationEnableCheckbox && speakerCountWrapper && speakerCountSelect) {
+    diarizationEnableCheckbox.addEventListener('change', () => {
+        if (diarizationEnableCheckbox.checked) {
+            speakerCountWrapper.classList.remove('disabled');
+            speakerCountSelect.removeAttribute('disabled');
+            announce('Sprechererkennung aktiviert.');
+        } else {
+            speakerCountWrapper.classList.add('disabled');
+            speakerCountSelect.setAttribute('disabled', 'true');
+            announce('Sprechererkennung deaktiviert.');
         }
     });
 }

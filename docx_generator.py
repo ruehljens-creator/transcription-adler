@@ -199,6 +199,8 @@ def create_docx(output_path, metadata, segments, target_lang=None):
         
         # Content mapping
         time_text = f"[{seg['start_str']} - {seg['end_str']}]"
+        if seg.get('speaker'):
+            time_text += f"\n{seg['speaker']}"
         
         if has_translation:
             row_data = [time_text, seg['original'], seg['translated']]

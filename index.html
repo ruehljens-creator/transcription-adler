@@ -111,6 +111,30 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Sprechererkennung -->
+                <div class="setting-group">
+                    <div class="toggle-header">
+                        <label for="diarization-enable" class="toggle-label">Sprecher erkennen (Diarisierung)</label>
+                        <label class="switch">
+                            <input type="checkbox" id="diarization-enable" aria-describedby="diarization-help">
+                            <span class="slider" aria-hidden="true"></span>
+                            <span class="sr-only">Sprechererkennung aktivieren</span>
+                        </label>
+                    </div>
+                    <p id="diarization-help" class="setting-help">
+                        Versucht, unterschiedliche Sprecher im Audio zu identifizieren und zu kennzeichnen.
+                    </p>
+                    <div class="select-wrapper disabled" id="speaker-count-wrapper">
+                        <label for="speaker-count" class="sr-only">Anzahl der Sprecher</label>
+                        <select id="speaker-count" disabled aria-label="Anzahl der Sprecher">
+                            <option value="2" selected>2 Sprecher</option>
+                            <option value="3">3 Sprecher</option>
+                            <option value="4">4 Sprecher</option>
+                            <option value="auto">Automatisch erkennen</option>
+                        </select>
+                    </div>
+                </div>
             </form>
 
             <button id="start-btn" type="button" class="btn btn-primary" disabled aria-describedby="start-help">

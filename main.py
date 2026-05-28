@@ -80,18 +80,18 @@ class Api:
             sys.stderr.flush()
             return []
 
-    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path=""):
+    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2"):
         """
         Starts processing the dropped files queue in a background thread to prevent UI lockup.
         """
         threading.Thread(
             target=self._process_queue, 
-            args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path), 
+            args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path, diarize, speaker_count), 
             daemon=True
         ).start()
         return True
 
-    def _process_queue(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path=""):
+    def _process_queue(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2"):
         """
         Processes files in the background: transcribes, translates, and writes word documents.
         """
@@ -119,7 +119,9 @@ class Api:
                     source_lang=source_lang, 
                     target_lang=target_lang, 
                     model_name=model_size,
-                    progress_callback=report_progress
+                    progress_callback=report_progress,
+                    diarize=diarize,
+                    speaker_count=speaker_count
                 )
                 
                 # 3. Create .docx file in chosen output directory
