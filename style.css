@@ -14,17 +14,17 @@
     --bg-input: #3c3c3c;        /* Input backgrounds */
 
     --border-color: #2d2d2d;    /* Subdued borders */
-    --border-color-active: #007acc; /* VS Code Blue selection */
+    --border-color-active: #666666; /* Light grey active borders instead of blue */
 
     --text-primary: #ffffff;    /* High contrast text */
     --text-secondary: #cccccc;  /* Regular description/secondary text */
     --text-muted: #858585;      /* Inactive/muted text description */
 
-    --primary: #007acc;         /* Signature VS Code Blue */
-    --primary-hover: #0062a3;   /* Accent hover state */
-    --primary-glow: rgba(0, 122, 204, 0.4);
-    --primary-gradient: #007acc;
-    --accent-gradient: linear-gradient(135deg, #007acc 0%, #1e88e5 100%);
+    --primary: #333333;         /* Sleek Dark Charcoal instead of blue */
+    --primary-hover: #444444;   /* Accent hover state */
+    --primary-glow: rgba(255, 255, 255, 0.08);
+    --primary-gradient: #333333;
+    --accent-gradient: linear-gradient(135deg, #ffffff 0%, #cccccc 100%); /* Silver-white text gradient */
 
     --success: #89d185;         /* VS Code Green */
     --success-bg: rgba(137, 209, 133, 0.15);
@@ -32,13 +32,13 @@
     --warning: #cca700;         /* VS Code Yellow */
     --warning-bg: rgba(204, 167, 0, 0.15);
 
-    --info: #3794ff;            /* VS Code Info Blue */
-    --info-bg: rgba(55, 148, 255, 0.15);
+    --info: #858585;            /* Neutral Grey instead of Info Blue */
+    --info-bg: rgba(255, 255, 255, 0.08);
 
     --danger: #f48771;          /* VS Code Red */
     --danger-bg: rgba(244, 135, 113, 0.15);
 
-    --focus-ring: 2px solid #007acc;
+    --focus-ring: 2px solid #ffffff; /* High contrast focus indicator */
     --focus-offset: 1px;
 
     --shadow-premium: 0 4px 20px 0 rgba(0, 0, 0, 0.5);
@@ -502,13 +502,13 @@ body {
 }
 
 .badge {
-    background: rgba(129, 140, 248, 0.2);
-    color: var(--primary-hover);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
     padding: 4px 12px;
     border-radius: 50px;
     font-size: 0.8125rem;
     font-weight: 600;
-    border: 1px solid rgba(129, 140, 248, 0.35);
+    border: 1px solid var(--border-color);
 }
 
 .queue-list-wrapper {
@@ -531,7 +531,7 @@ body {
 }
 
 .queue-table th {
-    background: rgba(15, 23, 42, 0.95);
+    background: var(--bg-app);
     position: sticky;
     top: 0;
     padding: 12px 16px;
@@ -637,8 +637,8 @@ body {
 }
 
 .location-link:hover {
-    color: var(--primary);
-    background: rgba(129, 140, 248, 0.1);
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .filename-cell {
@@ -771,7 +771,7 @@ body {
 
 /* Modal Content Box */
 .modal-content {
-    background-color: #101726;
+    background-color: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     width: 90%;

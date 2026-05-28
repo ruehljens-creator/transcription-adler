@@ -197,7 +197,7 @@ def main():
         width=1200,
         height=850,
         min_size=(900, 600),
-        background_color='#0f172a' # Matches dashboard dark slate background
+        background_color='#1e1e1e' # Matches VS Code dark background
     )
     
     webview.start(setup_events, (window, api))
