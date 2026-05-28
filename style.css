@@ -6,53 +6,48 @@
    - Reduzierte Bewegung respektiert
    ============================================================ */
 
-/* Design Tokens */
+/* Design Tokens - Antigravity (VS Code Dark) Theme */
 :root {
-    --bg-app: #0a0f1c;
-    --bg-card: rgba(20, 28, 46, 0.7);
-    --bg-card-hover: rgba(35, 46, 70, 0.8);
-    --bg-input: rgba(15, 23, 42, 0.95);
+    --bg-app: #1e1e1e;          /* Main editor area background */
+    --bg-card: #252526;         /* VS Code panel/sidebar background */
+    --bg-card-hover: #2a2d2e;   /* Hover item background */
+    --bg-input: #3c3c3c;        /* Input backgrounds */
 
-    --border-color: rgba(255, 255, 255, 0.18);
-    --border-color-active: #818cf8;
+    --border-color: #2d2d2d;    /* Subdued borders */
+    --border-color-active: #007acc; /* VS Code Blue selection */
 
-    /* Texte – Kontraste gegen --bg-app geprüft:
-       primary  #f8fafc  → 17.8 : 1  (AAA)
-       secondary #cbd5e1 → 11.6 : 1  (AAA)
-       muted    #a7b4c8  →  7.4 : 1  (AAA)  – früher zu dunkel
-    */
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-muted: #a7b4c8;
+    --text-primary: #ffffff;    /* High contrast text */
+    --text-secondary: #cccccc;  /* Regular description/secondary text */
+    --text-muted: #858585;      /* Inactive/muted text description */
 
-    --primary: #818cf8;
-    --primary-hover: #a5b1ff;
-    --primary-glow: rgba(129, 140, 248, 0.45);
-    --primary-gradient: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
-    --accent-gradient: linear-gradient(135deg, #c084fc 0%, #818cf8 100%);
+    --primary: #007acc;         /* Signature VS Code Blue */
+    --primary-hover: #0062a3;   /* Accent hover state */
+    --primary-glow: rgba(0, 122, 204, 0.4);
+    --primary-gradient: #007acc;
+    --accent-gradient: linear-gradient(135deg, #007acc 0%, #1e88e5 100%);
 
-    --success: #34d399;
-    --success-bg: rgba(52, 211, 153, 0.18);
+    --success: #89d185;         /* VS Code Green */
+    --success-bg: rgba(137, 209, 133, 0.15);
 
-    --warning: #fbbf24;
-    --warning-bg: rgba(251, 191, 36, 0.18);
+    --warning: #cca700;         /* VS Code Yellow */
+    --warning-bg: rgba(204, 167, 0, 0.15);
 
-    --info: #a78bfa;
-    --info-bg: rgba(167, 139, 250, 0.18);
+    --info: #3794ff;            /* VS Code Info Blue */
+    --info-bg: rgba(55, 148, 255, 0.15);
 
-    --danger: #f87171;
-    --danger-bg: rgba(248, 113, 113, 0.18);
+    --danger: #f48771;          /* VS Code Red */
+    --danger-bg: rgba(244, 135, 113, 0.15);
 
-    --focus-ring: 3px solid #fbbf24;
-    --focus-offset: 2px;
+    --focus-ring: 2px solid #007acc;
+    --focus-offset: 1px;
 
-    --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
-    --radius-lg: 16px;
-    --radius-md: 10px;
-    --radius-sm: 6px;
+    --shadow-premium: 0 4px 20px 0 rgba(0, 0, 0, 0.5);
+    --radius-lg: 4px;           /* VS Code is less rounded, very clean block layouts */
+    --radius-md: 4px;           /* 4px matches VS Code elements perfectly */
+    --radius-sm: 2px;           /* 2px for small badges/buttons */
 
-    --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Outfit', sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
 }
 
 /* Reset */
@@ -908,9 +903,10 @@ body {
 }
 
 /* Dropdown Options Contrast Correction */
+/* Dropdown Options Contrast Correction */
 .select-wrapper select option {
-    background-color: #101726 !important;
-    color: #f8fafc !important;
+    background-color: #252526 !important;
+    color: #ffffff !important;
 }
 
 /* Custom Path Settings Layout */
@@ -956,4 +952,219 @@ body {
     align-items: center;
     justify-content: center;
     white-space: nowrap;
+}
+
+/* Custom Settings Header in Sidebar */
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-header h2 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin: 0;
+}
+
+/* Hamburger button */
+.hamburger-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s;
+    outline: none;
+}
+
+.hamburger-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--border-color-active);
+}
+
+.hamburger-btn:focus-visible {
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.hamburger-btn:active {
+    transform: scale(0.95);
+}
+
+/* VS Code Style Checkbox Layout */
+.setting-group.checkbox-group {
+    gap: 8px;
+}
+
+.vscode-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    user-select: none;
+}
+
+.vscode-checkbox-label input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.checkbox-custom {
+    width: 18px;
+    height: 18px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    flex-shrink: 0;
+    position: relative;
+    margin-top: 2px;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.vscode-checkbox-label:hover .checkbox-custom {
+    border-color: var(--border-color-active);
+}
+
+.vscode-checkbox-label input[type="checkbox"]:checked + .checkbox-custom {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.vscode-checkbox-label input[type="checkbox"]:checked + .checkbox-custom::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border: solid #ffffff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.vscode-checkbox-label input[type="checkbox"]:focus-visible + .checkbox-custom {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+}
+
+/* Settings Drawer Styles */
+.drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+    z-index: 99; /* Below drawer (100) but above everything else */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.drawer-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.settings-drawer {
+    position: fixed;
+    top: 0;
+    left: -340px; /* Initially hidden to the left */
+    width: 340px;
+    height: 100vh;
+    background-color: var(--bg-card);
+    border-right: 1px solid var(--border-color);
+    box-shadow: var(--shadow-premium);
+    z-index: 100;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.settings-drawer.active {
+    transform: translateX(340px); /* Slide in to cover sidebar completely */
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 24px 16px 24px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.drawer-header h2 {
+    font-size: 1.1rem;
+    font-family: var(--font-heading);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.btn-close-drawer {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+    width: 28px;
+    height: 28px;
+}
+
+.btn-close-drawer:hover, .btn-close-drawer:focus {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.06);
+    outline: none;
+}
+
+.btn-close-drawer:focus-visible {
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.drawer-body {
+    padding: 24px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+}
+
+.drawer-footer {
+    padding: 16px 24px 24px 24px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.drawer-footer .btn {
+    width: 100%;
 }

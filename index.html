@@ -24,12 +24,20 @@
                 <h1>Transcription Adler</h1>
             </div>
 
-            <form class="settings-section" id="settings-form" onsubmit="return false;">
+            <div class="settings-header">
                 <h2 id="settings-heading">Einstellungen</h2>
+                <button id="open-drawer-btn" type="button" class="hamburger-btn" aria-label="Erweiterte Einstellungen öffnen" aria-expanded="false" aria-controls="settings-drawer">
+                    <span class="hamburger-icon" aria-hidden="true">☰</span>
+                </button>
+            </div>
 
+            <form class="settings-section" id="settings-form" onsubmit="return false;">
                 <!-- Quellsprache -->
                 <div class="setting-group">
                     <label for="source-lang">Sprache der Aufnahme</label>
+                    <p id="source-lang-help" class="setting-help">
+                        Die Sprache, in der das Audio aufgenommen wurde.
+                    </p>
                     <div class="select-wrapper">
                         <select id="source-lang" aria-describedby="source-lang-help">
                             <option value="auto">Automatisch erkennen</option>
@@ -40,21 +48,15 @@
                             <option value="it">Italienisch</option>
                         </select>
                     </div>
-                    <p id="source-lang-help" class="setting-help">
-                        Die Sprache, in der das Audio aufgenommen wurde.
-                    </p>
                 </div>
 
                 <!-- Übersetzung -->
-                <div class="setting-group">
-                    <div class="toggle-header">
-                        <label for="translate-enable" class="toggle-label">In Zielsprache übersetzen</label>
-                        <label class="switch" aria-hidden="false">
-                            <input type="checkbox" id="translate-enable" aria-describedby="translate-help">
-                            <span class="slider" aria-hidden="true"></span>
-                            <span class="sr-only">Übersetzung aktivieren</span>
-                        </label>
-                    </div>
+                <div class="setting-group checkbox-group">
+                    <label class="vscode-checkbox-label">
+                        <input type="checkbox" id="translate-enable" aria-describedby="translate-help">
+                        <span class="checkbox-custom"></span>
+                        <span class="label-text">In Zielsprache übersetzen</span>
+                    </label>
                     <p id="translate-help" class="setting-help">
                         Wenn aktiviert, wird das Transkript zusätzlich in die unten gewählte Sprache übersetzt.
                     </p>
@@ -66,72 +68,6 @@
                             <option value="es">Spanisch</option>
                             <option value="fr">Französisch</option>
                             <option value="it">Italienisch</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Modellgröße -->
-                <fieldset class="setting-group">
-                    <legend>Whisper-Modellgröße</legend>
-                    <div class="select-wrapper">
-                        <label for="model-size" class="sr-only">Modellgröße auswählen</label>
-                        <select id="model-size" aria-describedby="model-help">
-                            <option value="tiny">Tiny – sehr schnell, geringere Genauigkeit (74 MB)</option>
-                            <option value="base" selected>Base – Standard, gute Balance (140 MB)</option>
-                            <option value="small">Small – langsamer, höhere Genauigkeit (460 MB)</option>
-                        </select>
-                    </div>
-                    <p id="model-help" class="setting-help">
-                        Größere Modelle liefern bessere Ergebnisse, brauchen aber mehr Zeit.
-                    </p>
-                </fieldset>
-
-                <!-- Speicherort -->
-                <div class="setting-group">
-                    <label for="output-dir-type">Speicherort für Berichte</label>
-                    <div class="select-wrapper">
-                        <select id="output-dir-type" aria-describedby="output-dir-help">
-                            <option value="source" selected>Ordner der Quelldatei</option>
-                            <option value="desktop">Desktop</option>
-                            <option value="custom">Frei wählbarer Ordner...</option>
-                        </select>
-                    </div>
-                    <p id="output-dir-help" class="setting-help">
-                        Bestimmt, wo der generierte Word-Bericht gespeichert wird.
-                    </p>
-                    
-                    <!-- Custom Path Selection (hidden by default) -->
-                    <div id="custom-path-container" class="custom-path-container">
-                        <label for="custom-path-input" class="sr-only">Benutzerdefinierter Pfad</label>
-                        <div class="custom-path-row">
-                            <input type="text" id="custom-path-input" readonly placeholder="Kein Ordner ausgewählt" aria-label="Ausgewählter Speicherort">
-                            <button id="select-custom-path-btn" type="button" class="btn btn-secondary select-path-btn" aria-label="Ordner auswählen">
-                                Ordner wählen
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Sprechererkennung -->
-                <div class="setting-group">
-                    <div class="toggle-header">
-                        <label for="diarization-enable" class="toggle-label">Sprecher erkennen (Diarisierung)</label>
-                        <label class="switch">
-                            <input type="checkbox" id="diarization-enable" aria-describedby="diarization-help">
-                            <span class="slider" aria-hidden="true"></span>
-                            <span class="sr-only">Sprechererkennung aktivieren</span>
-                        </label>
-                    </div>
-                    <p id="diarization-help" class="setting-help">
-                        Versucht, unterschiedliche Sprecher im Audio zu identifizieren und zu kennzeichnen.
-                    </p>
-                    <div class="select-wrapper disabled" id="speaker-count-wrapper">
-                        <label for="speaker-count" class="sr-only">Anzahl der Sprecher</label>
-                        <select id="speaker-count" disabled aria-label="Anzahl der Sprecher">
-                            <option value="2" selected>2 Sprecher</option>
-                            <option value="3">3 Sprecher</option>
-                            <option value="4">4 Sprecher</option>
-                            <option value="auto">Automatisch erkennen</option>
                         </select>
                     </div>
                 </div>
@@ -275,6 +211,85 @@
                     </li>
                 </ul>
             </div>
+        </div>
+    </div>
+
+    <!-- Settings Drawer (Erweiterte Einstellungen) -->
+    <div class="drawer-overlay" id="drawer-overlay" aria-hidden="true"></div>
+    <div class="settings-drawer" id="settings-drawer" aria-hidden="true" role="dialog" aria-labelledby="drawer-title">
+        <div class="drawer-header">
+            <h2 id="drawer-title">Erweiterte Einstellungen</h2>
+            <button id="close-drawer-btn" type="button" class="btn-close-drawer" aria-label="Schließen">&times;</button>
+        </div>
+        <div class="drawer-body">
+            <!-- Whisper-Modellgröße -->
+            <fieldset class="setting-group">
+                <legend>Whisper-Modellgröße</legend>
+                <p id="model-help" class="setting-help">
+                    Größere Modelle liefern bessere Ergebnisse, brauchen aber mehr Zeit.
+                </p>
+                <div class="select-wrapper">
+                    <label for="model-size" class="sr-only">Modellgröße auswählen</label>
+                    <select id="model-size" aria-describedby="model-help">
+                        <option value="tiny">Tiny – sehr schnell, geringere Genauigkeit (74 MB)</option>
+                        <option value="base" selected>Base – Standard, gute Balance (140 MB)</option>
+                        <option value="small">Small – langsamer, höhere Genauigkeit (460 MB)</option>
+                    </select>
+                </div>
+            </fieldset>
+
+            <!-- Speicherort -->
+            <div class="setting-group">
+                <label for="output-dir-type">Speicherort für Berichte</label>
+                <p id="output-dir-help" class="setting-help">
+                    Bestimmt, wo der generierte Word-Bericht gespeichert wird.
+                </p>
+                <div class="select-wrapper">
+                    <select id="output-dir-type" aria-describedby="output-dir-help">
+                        <option value="source" selected>Ordner der Quelldatei</option>
+                        <option value="desktop">Desktop</option>
+                        <option value="custom">Frei wählbarer Ordner...</option>
+                    </select>
+                </div>
+                
+                <!-- Custom Path Selection (hidden by default) -->
+                <div id="custom-path-container" class="custom-path-container">
+                    <label for="custom-path-input" class="sr-only">Benutzerdefinierter Pfad</label>
+                    <div class="custom-path-row">
+                        <input type="text" id="custom-path-input" readonly placeholder="Kein Ordner ausgewählt" aria-label="Ausgewählter Speicherort">
+                        <button id="select-custom-path-btn" type="button" class="btn btn-secondary select-path-btn" aria-label="Ordner auswählen">
+                            Ordner wählen
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sprechererkennung -->
+            <div class="setting-group checkbox-group">
+                <label class="vscode-checkbox-label">
+                    <input type="checkbox" id="diarization-enable" aria-describedby="diarization-help">
+                    <span class="checkbox-custom"></span>
+                    <span class="label-text">Sprecher erkennen (Diarisierung)</span>
+                </label>
+                <p id="diarization-help" class="setting-help">
+                    Versucht, unterschiedliche Sprecher im Audio zu identifizieren und zu kennzeichnen.
+                </p>
+                <div class="select-wrapper disabled" id="speaker-count-wrapper">
+                    <label for="speaker-count" class="sr-only">Anzahl der Sprecher</label>
+                    <select id="speaker-count" disabled aria-label="Anzahl der Sprecher">
+                        <option value="2" selected>2 Sprecher</option>
+                        <option value="3">3 Sprecher</option>
+                        <option value="4">4 Sprecher</option>
+                        <option value="auto">Automatisch erkennen</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="drawer-footer">
+            <button id="save-drawer-btn" type="button" class="btn btn-primary" aria-label="Einstellungen speichern und schließen">
+                Fertig
+            </button>
         </div>
     </div>
 

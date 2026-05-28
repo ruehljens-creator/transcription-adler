@@ -20,6 +20,13 @@ const queueTbody = document.getElementById('queue-tbody');
 const queueCountBadge = document.getElementById('queue-count');
 const srAnnouncer = document.getElementById('sr-announcer');
 
+// Drawer Elements
+const openDrawerBtn = document.getElementById('open-drawer-btn');
+const closeDrawerBtn = document.getElementById('close-drawer-btn');
+const saveDrawerBtn = document.getElementById('save-drawer-btn');
+const drawerOverlay = document.getElementById('drawer-overlay');
+const settingsDrawer = document.getElementById('settings-drawer');
+
 // ------------------------------------------------------------
 // Screenreader-Ankündigung
 // ------------------------------------------------------------
@@ -433,6 +440,41 @@ if (diarizationEnableCheckbox && speakerCountWrapper && speakerCountSelect) {
             speakerCountWrapper.classList.add('disabled');
             speakerCountSelect.setAttribute('disabled', 'true');
             announce('Sprechererkennung deaktiviert.');
+        }
+    });
+}
+
+// ------------------------------------------------------------
+// Settings Drawer (Erweiterte Einstellungen) Steuerung
+// ------------------------------------------------------------
+if (openDrawerBtn && closeDrawerBtn && saveDrawerBtn && drawerOverlay && settingsDrawer) {
+    function openDrawer() {
+        settingsDrawer.classList.add('active');
+        drawerOverlay.classList.add('active');
+        settingsDrawer.setAttribute('aria-hidden', 'false');
+        openDrawerBtn.setAttribute('aria-expanded', 'true');
+        closeDrawerBtn.focus();
+        announce('Erweiterte Einstellungen geöffnet.');
+    }
+
+    function closeDrawer() {
+        settingsDrawer.classList.remove('active');
+        drawerOverlay.classList.remove('active');
+        settingsDrawer.setAttribute('aria-hidden', 'true');
+        openDrawerBtn.setAttribute('aria-expanded', 'false');
+        openDrawerBtn.focus();
+        announce('Erweiterte Einstellungen geschlossen.');
+    }
+
+    openDrawerBtn.addEventListener('click', openDrawer);
+    closeDrawerBtn.addEventListener('click', closeDrawer);
+    saveDrawerBtn.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click', closeDrawer);
+
+    // Close on Escape key press
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsDrawer.classList.contains('active')) {
+            closeDrawer();
         }
     });
 }
