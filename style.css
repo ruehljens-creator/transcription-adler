@@ -912,3 +912,48 @@ body {
     background-color: #101726 !important;
     color: #f8fafc !important;
 }
+
+/* Custom Path Settings Layout */
+.custom-path-container {
+    display: none;
+    margin-top: 10px;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.custom-path-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+}
+
+#custom-path-input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    outline: none;
+}
+
+#custom-path-input:focus-visible {
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.select-path-btn {
+    padding: 8px 12px !important;
+    font-size: 0.85rem !important;
+    height: 38px !important;
+    min-width: auto !important;
+    margin: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}

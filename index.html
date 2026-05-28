@@ -85,6 +85,32 @@
                         Größere Modelle liefern bessere Ergebnisse, brauchen aber mehr Zeit.
                     </p>
                 </fieldset>
+
+                <!-- Speicherort -->
+                <div class="setting-group">
+                    <label for="output-dir-type">Speicherort für Berichte</label>
+                    <div class="select-wrapper">
+                        <select id="output-dir-type" aria-describedby="output-dir-help">
+                            <option value="source" selected>Ordner der Quelldatei</option>
+                            <option value="desktop">Desktop</option>
+                            <option value="custom">Frei wählbarer Ordner...</option>
+                        </select>
+                    </div>
+                    <p id="output-dir-help" class="setting-help">
+                        Bestimmt, wo der generierte Word-Bericht gespeichert wird.
+                    </p>
+                    
+                    <!-- Custom Path Selection (hidden by default) -->
+                    <div id="custom-path-container" class="custom-path-container">
+                        <label for="custom-path-input" class="sr-only">Benutzerdefinierter Pfad</label>
+                        <div class="custom-path-row">
+                            <input type="text" id="custom-path-input" readonly placeholder="Kein Ordner ausgewählt" aria-label="Ausgewählter Speicherort">
+                            <button id="select-custom-path-btn" type="button" class="btn btn-secondary select-path-btn" aria-label="Ordner auswählen">
+                                Ordner wählen
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </form>
 
             <button id="start-btn" type="button" class="btn btn-primary" disabled aria-describedby="start-help">

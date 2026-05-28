@@ -298,7 +298,9 @@ startBtn.addEventListener('click', () => {
 
     const paths = fileQueue.map(f => f.path);
     if (window.pywebview && window.pywebview.api) {
-        window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize);
+        const outputDirType = document.getElementById('output-dir-type').value;
+    const customPath = customOutputPath;
+    window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath);
     }
 });
 
@@ -380,3 +382,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// ------------------------------------------------------------
+// Speicherort-Steuerung (Einstellungsmenü)
+// ------------------------------------------------------------
+let customOutputPath = '';
+const outputDirTypeSelect = document.getElementById('output-dir-type');
+const customPathContainer = document.getElementById('custom-path-container');
+const customPathInput = document.getElementById('custom-path-input');
+const selectCustomPathBtn = document.getElementById('select-custom-path-btn');
+
+if (outputDirTypeSelect && customPathContainer && customPathInput && selectCustomPathBtn) {
+    outputDirTypeSelect.addEventListener('change', () => {
+        if (outputDirTypeSelect.value === 'custom') {
+            customPathContainer.style.display = 'flex';
+        } else {
+            customPathContainer.style.display = 'none';
+        }
+    });
+
+    selectCustomPathBtn.addEventListener('click', () => {
+        if (window.pywebview && window.pywebview.api) {
+            window.pywebview.api.select_output_folder().then(path => {
+                if (path) {
+                    customOutputPath = path;
+                    customPathInput.value = path;
+                    announce(`Ausgewählter Speicherort: ${path}`);
+                }
+            });
+        }
+    });
+}

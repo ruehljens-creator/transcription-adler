@@ -50,6 +50,21 @@ class Api:
         except Exception as e:
             return {"error": str(e)}
 
+    def select_output_folder(self):
+        """
+        Opens a folder dialog to let the user select a custom output directory.
+        """
+        try:
+            result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+            if result and len(result) > 0:
+                return result[0] if isinstance(result, (list, tuple)) else result
+            return ""
+        except Exception as e:
+            import sys
+            print(f"Error in select_output_folder: {e}", file=sys.stderr)
+            sys.stderr.flush()
+            return ""
+
     def select_files(self):
         """
         Opens a native system file selector as a fallback/alternative to drag-and-drop.
@@ -65,18 +80,18 @@ class Api:
             sys.stderr.flush()
             return []
 
-    def start_transcription(self, files, source_lang, target_lang, model_size):
+    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path=""):
         """
         Starts processing the dropped files queue in a background thread to prevent UI lockup.
         """
         threading.Thread(
             target=self._process_queue, 
-            args=(files, source_lang, target_lang, model_size), 
+            args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path), 
             daemon=True
         ).start()
         return True
 
-    def _process_queue(self, files, source_lang, target_lang, model_size):
+    def _process_queue(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path=""):
         """
         Processes files in the background: transcribes, translates, and writes word documents.
         """
@@ -107,10 +122,22 @@ class Api:
                     progress_callback=report_progress
                 )
                 
-                # 3. Create .docx file in same directory as source file
+                # 3. Create .docx file in chosen output directory
                 report_progress(95, "Generiere Word-Bericht...")
-                base_path, _ = os.path.splitext(file_path)
-                output_docx = f"{base_path}_transkript.docx"
+                
+                base_name = os.path.basename(file_path)
+                name_without_ext, _ = os.path.splitext(base_name)
+                output_name = f"{name_without_ext}_transkript.docx"
+                
+                if output_dir_type == "desktop":
+                    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+                    output_docx = os.path.join(desktop_path, output_name)
+                elif output_dir_type == "custom" and custom_path and os.path.isdir(custom_path):
+                    output_docx = os.path.join(custom_path, output_name)
+                else:
+                    # Default: source folder
+                    base_path, _ = os.path.splitext(file_path)
+                    output_docx = f"{base_path}_transkript.docx"
                 
                 create_docx(output_docx, meta, result["segments"], target_lang=target_lang)
                 
