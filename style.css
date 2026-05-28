@@ -10,6 +10,7 @@
 :root {
     --bg-app: #1e1e1e;          /* Main editor area background */
     --bg-card: #252526;         /* VS Code panel/sidebar background */
+    --bg-settings: #111111;     /* Black/Very dark grey background behind settings */
     --bg-card-hover: #2a2d2e;   /* Hover item background */
     --bg-input: #3c3c3c;        /* Input backgrounds */
 
@@ -137,7 +138,7 @@ body {
 .sidebar {
     width: 340px;
     min-width: 340px;
-    background: linear-gradient(180deg, rgba(20, 28, 46, 0.95) 0%, rgba(10, 15, 28, 0.98) 100%);
+    background: var(--bg-settings);
     border-right: 1px solid var(--border-color);
     padding: 30px 24px;
     display: flex;
@@ -905,7 +906,7 @@ body {
 /* Dropdown Options Contrast Correction */
 /* Dropdown Options Contrast Correction */
 .select-wrapper select option {
-    background-color: #252526 !important;
+    background-color: var(--bg-settings) !important;
     color: #ffffff !important;
 }
 
@@ -1093,7 +1094,7 @@ body {
     left: -340px; /* Initially hidden to the left */
     width: 340px;
     height: 100vh;
-    background-color: var(--bg-card);
+    background-color: var(--bg-settings);
     border-right: 1px solid var(--border-color);
     box-shadow: var(--shadow-premium);
     z-index: 100;
