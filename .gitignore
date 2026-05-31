@@ -28,9 +28,15 @@ build/
 ffmpeg.exe
 ffprobe.exe
 
+# Installer-Artefakte (zu groß für GitHub, >100 MB)
+TranscriptionAdler_Setup.exe
+TranscriptionAdler_Setup.zip
+*.zip
+
 # IDE-Dateien
 .vscode/
 .idea/
+.claude/
 
 # WICHTIG: TranscriptionAdler.spec wird eingecheckt, andere .spec ignoriert
 *.spec
