@@ -103,6 +103,16 @@ a = Analysis(
         'jupyter',
         'notebook',
         'pytest',
+        # Weitere große, ungenutzte Pakete (winforms+edgechromium statt Qt;
+        # Whisper braucht weder torchvision/torchaudio noch OpenCV/sklearn).
+        'PyQt5',
+        'PyQt6',
+        'PySide2',
+        'PySide6',
+        'torchvision',
+        'torchaudio',
+        'cv2',
+        'sklearn',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
