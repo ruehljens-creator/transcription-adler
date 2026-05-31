@@ -66,9 +66,17 @@ def format_seconds(seconds):
     s = int(seconds % 60)
     return f"{h:02d}:{m:02d}:{s:02d}"
 
-def create_docx(output_path, metadata, segments, target_lang=None, cuts=None, docx_trans_mode="both"):
+def create_docx(output_path, metadata, segments, target_lang=None, cuts=None, docx_trans_mode="both", timecode_mode="every"):
     """
     Creates a styled Word Document (.docx) for the transcribed clip.
+
+    timecode_mode controls how timestamps appear in the transcript table:
+      "every"   – a timestamp on every segment row (default / legacy behaviour).
+      "rows"    – one row per segment, but the timestamp + speaker only appear
+                  on a speaker change; same-speaker rows keep only cut labels.
+      "blocks"  – consecutive same-speaker segments are merged into one block
+                  with a single timestamp + speaker and the combined text.
+    The "rows"/"blocks" modes only take effect when speaker labels are present.
     """
     doc = docx.Document()
     
@@ -243,50 +251,111 @@ def create_docx(output_path, metadata, segments, target_lang=None, cuts=None, do
                 boundary_labels_map[in_idx].append(f"IN #{c_idx + 1}")
                 boundary_labels_map[out_idx].append(f"OUT #{c_idx + 1}")
 
-    # Data Rows
-    for r_idx, seg in enumerate(segments):
-        row = table.add_row()
-        row_cells = row.cells
-        
-        # Determine background color and boundaries for Schnittmarken
-        is_inside_cut = is_inside_cut_list[r_idx]
-        boundary_labels = boundary_labels_map[r_idx]
-            
-        if is_inside_cut:
-            bg_color = "E2F0D9"  # Soft light green for cut range
-        else:
-            bg_color = "F8FAFC" if r_idx % 2 == 1 else "FFFFFF"
-        
-        # Content mapping
-        time_prefix = ""
-        if len(boundary_labels) > 0:
-            time_prefix = f"[{', '.join(boundary_labels)}] "
-                
-        time_text = f"{time_prefix}[{seg['start_str']} - {seg['end_str']}]"
-        if seg.get('speaker'):
-            time_text += f"\n{seg['speaker']}"
-        
+    # ------------------------------------------------------------
+    # Build the list of rows to render, depending on the timecode mode.
+    # The speaker-change modes ("rows"/"blocks") only apply when speakers
+    # were actually detected – otherwise fall back to a timestamp per row.
+    # ------------------------------------------------------------
+    has_speakers = any(seg.get('speaker') for seg in segments)
+    effective_mode = timecode_mode if has_speakers else "every"
+
+    def build_columns(original_text, translated_text):
+        """Maps original/translated text onto the configured content columns."""
         if has_translation:
             if docx_trans_mode == "translated":
-                row_data = [time_text, seg.get('translated', seg['original'])]
+                return [translated_text or original_text]
+            return [original_text, translated_text or original_text]
+        return [original_text]
+
+    render_rows = []
+
+    if effective_mode == "blocks":
+        i = 0
+        n = len(segments)
+        while i < n:
+            speaker = segments[i].get('speaker')
+            indices = []
+            while i < n and segments[i].get('speaker') == speaker:
+                indices.append(i)
+                i += 1
+
+            first_seg = segments[indices[0]]
+            last_seg = segments[indices[-1]]
+
+            block_labels = []
+            for idx in indices:
+                block_labels.extend(boundary_labels_map[idx])
+            prefix = f"[{', '.join(block_labels)}] " if block_labels else ""
+
+            time_text = f"{prefix}[{first_seg['start_str']} - {last_seg['end_str']}]"
+            if speaker:
+                time_text += f"\n{speaker}"
+
+            original_text = " ".join(
+                segments[idx]['original'] for idx in indices if segments[idx].get('original')
+            )
+            translated_text = ""
+            if has_translation:
+                translated_text = " ".join(
+                    (segments[idx].get('translated') or segments[idx]['original']) for idx in indices
+                )
+
+            render_rows.append({
+                'time_text': time_text,
+                'cols': build_columns(original_text, translated_text),
+                'inside_cut': any(is_inside_cut_list[idx] for idx in indices),
+                'has_boundary': len(block_labels) > 0,
+            })
+    else:
+        _no_prev = object()
+        prev_speaker = _no_prev
+        for r_idx, seg in enumerate(segments):
+            speaker = seg.get('speaker')
+            boundary_labels = boundary_labels_map[r_idx]
+            prefix = f"[{', '.join(boundary_labels)}] " if boundary_labels else ""
+
+            if effective_mode == "rows" and speaker == prev_speaker:
+                # Same speaker as the previous row: drop the timestamp/speaker,
+                # but still show any cut boundary labels for this segment.
+                time_text = prefix.strip()
             else:
-                row_data = [time_text, seg['original'], seg.get('translated', seg['original'])]
+                time_text = f"{prefix}[{seg['start_str']} - {seg['end_str']}]"
+                if speaker:
+                    time_text += f"\n{speaker}"
+            prev_speaker = speaker
+
+            render_rows.append({
+                'time_text': time_text,
+                'cols': build_columns(seg['original'], seg.get('translated')),
+                'inside_cut': is_inside_cut_list[r_idx],
+                'has_boundary': len(boundary_labels) > 0,
+            })
+
+    # Data Rows
+    for row_idx, rr in enumerate(render_rows):
+        row = table.add_row()
+        row_cells = row.cells
+
+        if rr['inside_cut']:
+            bg_color = "E2F0D9"  # Soft light green for cut range
         else:
-            row_data = [time_text, seg['original']]
-            
+            bg_color = "F8FAFC" if row_idx % 2 == 1 else "FFFFFF"
+
+        row_data = [rr['time_text']] + rr['cols']
+
         for i, text in enumerate(row_data):
             row_cells[i].width = col_widths[i]
             set_cell_background(row_cells[i], bg_color)
             set_cell_margins(row_cells[i], top=100, bottom=100, left=150, right=150)
-            
+
             p = row_cells[i].paragraphs[0]
             p.paragraph_format.space_after = Pt(0)
-            
+
             if i == 0:
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = p.add_run(text)
                 run.font.size = Pt(9.5)
-                if len(boundary_labels) > 0:
+                if rr['has_boundary']:
                     run.bold = True
                     run.font.color.rgb = RGBColor(0x2E, 0x7D, 0x32) # Dark green
                 else:
@@ -321,4 +390,16 @@ if __name__ == '__main__':
     # Test with a cut that overlaps both segments (2.5s to 8.0s)
     create_docx('test_output.docx', test_meta, test_segments, 'en', cuts=[[2.5, 8.0]])
     create_docx('test_translated_only.docx', test_meta, test_segments, 'en', cuts=[[2.5, 8.0]], docx_trans_mode='translated')
+
+    # Diarized test data to exercise the timecode modes
+    diarized_segments = [
+        {'start': 0.0, 'end': 4.0, 'start_str': '00:00:00', 'end_str': '00:00:04', 'original': 'Guten Tag, schön dass Sie da sind.', 'translated': '', 'speaker': 'Sprecher A'},
+        {'start': 4.0, 'end': 8.0, 'start_str': '00:00:04', 'end_str': '00:00:08', 'original': 'Heute sprechen wir über das Projekt.', 'translated': '', 'speaker': 'Sprecher A'},
+        {'start': 8.0, 'end': 12.0, 'start_str': '00:00:08', 'end_str': '00:00:12', 'original': 'Vielen Dank für die Einladung.', 'translated': '', 'speaker': 'Sprecher B'},
+        {'start': 12.0, 'end': 16.0, 'start_str': '00:00:12', 'end_str': '00:00:16', 'original': 'Fangen wir gleich an.', 'translated': '', 'speaker': 'Sprecher A'},
+    ]
+    create_docx('test_tc_every.docx', test_meta, diarized_segments, timecode_mode='every')
+    create_docx('test_tc_rows.docx', test_meta, diarized_segments, timecode_mode='rows')
+    create_docx('test_tc_blocks.docx', test_meta, diarized_segments, timecode_mode='blocks')
+    print("Timecode-Modus-Testdokumente erzeugt (every/rows/blocks).")
 

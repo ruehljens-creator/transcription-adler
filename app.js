@@ -7,6 +7,15 @@ let fileQueue = [];
 let isProcessing = false;
 let customOutputPath = '';
 
+// Liefert die aktuell gewählten Zeitstempel-Modi (Mehrfachauswahl).
+// Fällt auf ['every'] zurück, falls nichts ausgewählt ist.
+function getSelectedTimecodeModes() {
+    const modes = Array.from(document.querySelectorAll('.timecode-mode'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
+    return modes.length > 0 ? modes : ['every'];
+}
+
 function saveSettings() {
     try {
         const settings = {
@@ -19,7 +28,8 @@ function saveSettings() {
             customPathInput: document.getElementById('custom-path-input')?.value,
             diarizationEnable: document.getElementById('diarization-enable')?.checked,
             speakerCount: document.getElementById('speaker-count')?.value,
-            docxTransMode: document.getElementById('docx-trans-mode')?.value
+            docxTransMode: document.getElementById('docx-trans-mode')?.value,
+            timecodeModes: getSelectedTimecodeModes()
         };
         localStorage.setItem('adler_settings', JSON.stringify(settings));
     } catch (e) {
@@ -101,7 +111,13 @@ function loadSettings() {
         
         const docxSelect = document.getElementById('docx-trans-mode');
         if (docxSelect && settings.docxTransMode) docxSelect.value = settings.docxTransMode;
-        
+
+        if (Array.isArray(settings.timecodeModes)) {
+            document.querySelectorAll('.timecode-mode').forEach(cb => {
+                cb.checked = settings.timecodeModes.includes(cb.value);
+            });
+        }
+
     } catch (e) {
         console.error("Fehler beim Laden der Einstellungen:", e);
     }
@@ -555,7 +571,8 @@ startBtn.addEventListener('click', () => {
         const diarize = document.getElementById('diarization-enable').checked;
         const speakerCount = document.getElementById('speaker-count').value;
         const docxTransMode = document.getElementById('docx-trans-mode').value;
-        window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount, docxTransMode);
+        const timecodeModes = getSelectedTimecodeModes();
+        window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount, docxTransMode, timecodeModes);
     }
 });
 
@@ -1322,6 +1339,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Zeitstempel-Modi (Mehrfachauswahl) speichern bei Änderung
+    document.querySelectorAll('.timecode-mode').forEach(cb => {
+        cb.addEventListener('change', saveSettings);
+    });
+
     // Sidebar Ein-/Ausblenden
     const btnCollapse = document.getElementById('btn-collapse-sidebar');
     const btnExpand = document.getElementById('btn-expand-sidebar');
@@ -1440,17 +1462,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const customPath = customOutputPath;
                 const targetLang = translateEnableCheckbox.checked ? targetLangSelect.value : null;
                 const docxTransMode = document.getElementById('docx-trans-mode').value;
+                const timecodeModes = getSelectedTimecodeModes();
 
                 // Sende Array von [start, end] an Python
                 const cutsData = cuts.map(c => [c.start, c.end]);
 
                 window.pywebview.api.update_docx_with_cuts(
-                    currentPlayingFile.path, 
+                    currentPlayingFile.path,
                     JSON.stringify(cutsData), // Als JSON stringifiziert
-                    outputDirType, 
-                    customPath, 
+                    outputDirType,
+                    customPath,
                     targetLang,
-                    docxTransMode
+                    docxTransMode,
+                    timecodeModes
                 ).then(result => {
                     if (result && result.success) {
                         showCutMessage(`Erfolgreich erstellt: ${result.filename}`, "success");

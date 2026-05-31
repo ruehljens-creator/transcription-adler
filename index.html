@@ -365,6 +365,33 @@
                 </div>
             </div>
             
+            <!-- Zeitstempel-Darstellung im Bericht (Mehrfachauswahl) -->
+            <fieldset class="setting-group">
+                <legend>Zeitstempel im Word-Bericht</legend>
+                <p id="timecode-modes-help" class="setting-help">
+                    Legt fest, wann ein Zeitstempel geschrieben wird. Die Sprecherwechsel-Varianten
+                    wirken nur bei aktiver Sprechererkennung. Mehrfachauswahl möglich – pro gewählter
+                    Variante wird ein eigenes Word-Dokument erzeugt.
+                </p>
+                <div class="checkbox-group" role="group" aria-describedby="timecode-modes-help" aria-label="Zeitstempel-Darstellung im Bericht">
+                    <label class="vscode-checkbox-label">
+                        <input type="checkbox" class="timecode-mode" value="every" checked>
+                        <span class="checkbox-custom"></span>
+                        <span class="label-text">Bei jedem Segment (Standard)</span>
+                    </label>
+                    <label class="vscode-checkbox-label">
+                        <input type="checkbox" class="timecode-mode" value="blocks">
+                        <span class="checkbox-custom"></span>
+                        <span class="label-text">Nur bei Sprecherwechsel – Sprecher zusammenfassen</span>
+                    </label>
+                    <label class="vscode-checkbox-label">
+                        <input type="checkbox" class="timecode-mode" value="rows">
+                        <span class="checkbox-custom"></span>
+                        <span class="label-text">Nur bei Sprecherwechsel – pro Segment</span>
+                    </label>
+                </div>
+            </fieldset>
+
             <!-- Programminformationen und Lizenzen -->
             <div class="setting-group info-group">
                 <button id="info-btn" type="button" class="info-button" aria-label="Programminformationen und Lizenzen öffnen">

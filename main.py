@@ -92,14 +92,42 @@ class Api:
             "token": self._server_token
         }
 
+    # Suffix appended to the report filename per timecode mode (only used when
+    # more than one mode is selected, so a single mode keeps the clean name).
+    _TIMECODE_SUFFIX = {
+        "every": "",
+        "rows": "_sprecherwechsel",
+        "blocks": "_sprecherbloecke",
+    }
+
     @staticmethod
-    def _resolve_output_docx(file_path, output_dir_type, custom_path):
+    def _normalize_timecode_modes(timecode_modes):
+        """
+        Accepts the timecode mode selection from the frontend (a list, a single
+        string, or None) and returns a clean, ordered list of valid modes.
+        """
+        valid = ["every", "rows", "blocks"]
+        if not timecode_modes:
+            return ["every"]
+        if isinstance(timecode_modes, str):
+            timecode_modes = [timecode_modes]
+        # Keep valid modes, preserve order, drop duplicates
+        seen = []
+        for m in timecode_modes:
+            if m in valid and m not in seen:
+                seen.append(m)
+        return seen or ["every"]
+
+    @staticmethod
+    def _resolve_output_docx(file_path, output_dir_type, custom_path, suffix=""):
         """
         Determines where the generated .docx report should be written, based on
         the user's output preference (desktop / custom folder / next to source).
+        An optional suffix is inserted before the extension to distinguish
+        multiple reports of the same clip (one per timecode mode).
         """
         name_without_ext, _ = os.path.splitext(os.path.basename(file_path))
-        output_name = f"{name_without_ext}_transkript.docx"
+        output_name = f"{name_without_ext}_transkript{suffix}.docx"
 
         if output_dir_type == "desktop":
             return os.path.join(os.path.expanduser("~"), "Desktop", output_name)
@@ -107,41 +135,61 @@ class Api:
             return os.path.join(custom_path, output_name)
         # Default: alongside the source file
         base_path, _ = os.path.splitext(file_path)
-        return f"{base_path}_transkript.docx"
+        return f"{base_path}_transkript{suffix}.docx"
 
-    def update_docx_with_cuts(self, file_path, cuts_json, output_dir_type="source", custom_path="", target_lang=None, docx_trans_mode="both"):
+    def _generate_reports(self, file_path, meta, segments, output_dir_type, custom_path,
+                          target_lang, docx_trans_mode, timecode_modes, cuts=None):
         """
-        Re-generates the Word Document, highlighting the list of cuts in the segments table.
+        Generates one Word report per selected timecode mode and returns the list
+        of created file basenames. With a single mode the clean filename is used;
+        with several modes each gets a descriptive suffix to avoid overwriting.
+        """
+        modes = self._normalize_timecode_modes(timecode_modes)
+        multiple = len(modes) > 1
+        created = []
+        for mode in modes:
+            suffix = self._TIMECODE_SUFFIX.get(mode, "") if multiple else ""
+            output_docx = self._resolve_output_docx(file_path, output_dir_type, custom_path, suffix)
+            create_docx(
+                output_docx,
+                meta,
+                segments,
+                target_lang=target_lang,
+                cuts=cuts,
+                docx_trans_mode=docx_trans_mode,
+                timecode_mode=mode
+            )
+            created.append(os.path.basename(output_docx))
+        return created
+
+    def update_docx_with_cuts(self, file_path, cuts_json, output_dir_type="source", custom_path="", target_lang=None, docx_trans_mode="both", timecode_modes=None):
+        """
+        Re-generates the Word Document(s), highlighting the list of cuts in the segments table.
         Called from the JS frontend when the user clicks "Bericht aktualisieren".
+        One report is written per selected timecode mode.
         """
         if not os.path.exists(file_path):
             return {"success": False, "error": "Datei existiert nicht"}
-            
+
         segments = self._transcripts.get(file_path)
         if not segments:
             return {"success": False, "error": "Keine Transkriptionsdaten im Cache gefunden"}
-            
+
         try:
             import json
             cuts_list = json.loads(cuts_json)  # Parses list of [start, end] pairs
-            
+
             meta = get_metadata(file_path)
 
-            output_docx = self._resolve_output_docx(file_path, output_dir_type, custom_path)
-
-            create_docx(
-                output_docx, 
-                meta, 
-                segments, 
-                target_lang=target_lang, 
-                cuts=cuts_list,
-                docx_trans_mode=docx_trans_mode
+            created = self._generate_reports(
+                file_path, meta, segments, output_dir_type, custom_path,
+                target_lang, docx_trans_mode, timecode_modes, cuts=cuts_list
             )
-            
+
             return {
-                "success": True, 
-                "path": output_docx, 
-                "filename": os.path.basename(output_docx)
+                "success": True,
+                "filename": ", ".join(created),
+                "filenames": created
             }
         except Exception as e:
             print(f"Fehler bei Aktualisierung des Berichts: {e}")
@@ -195,18 +243,18 @@ class Api:
         """
         return self._transcripts.get(file_path, [])
 
-    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both"):
+    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
         """
         Starts processing the dropped files queue in a background thread to prevent UI lockup.
         """
         threading.Thread(
-            target=self._process_queue, 
-            args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path, diarize, speaker_count, docx_trans_mode), 
+            target=self._process_queue,
+            args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path, diarize, speaker_count, docx_trans_mode, timecode_modes),
             daemon=True
         ).start()
         return True
 
-    def _process_queue(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both"):
+    def _process_queue(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
         """
         Processes files in the background: transcribes, translates, and writes word documents.
         """
@@ -242,15 +290,18 @@ class Api:
                 # Cache the segments for the frontend player
                 self._transcripts[file_path] = result["segments"]
                 
-                # 3. Create .docx file in chosen output directory
+                # 3. Create one .docx per selected timecode mode in chosen output directory
                 report_progress(95, "Generiere Word-Bericht...")
 
-                output_docx = self._resolve_output_docx(file_path, output_dir_type, custom_path)
+                created = self._generate_reports(
+                    file_path, meta, result["segments"], output_dir_type, custom_path,
+                    target_lang, docx_trans_mode, timecode_modes
+                )
 
-                create_docx(output_docx, meta, result["segments"], target_lang=target_lang, docx_trans_mode=docx_trans_mode)
-                
-                report_name = os.path.basename(output_docx)
-                report_progress(100, f"Erstellt: {report_name}")
+                if len(created) == 1:
+                    report_progress(100, f"Erstellt: {created[0]}")
+                else:
+                    report_progress(100, f"{len(created)} Berichte erstellt")
                 
             except Exception as e:
                 print(f"Fehler bei Verarbeitung von {file_name}: {e}")
