@@ -16,7 +16,7 @@ import webview
 import threading
 from webview.dom import DOMEventHandler
 from metadata import get_metadata
-from transcribe import transcribe_file
+from transcribe import transcribe_file, TranscriptionCancelled
 from docx_generator import create_docx
 import socket
 import secrets
@@ -47,11 +47,34 @@ class Api:
     def __init__(self):
         self._window = None
         self._transcripts = {}
-        
+        # UI settings remembered for the current session (reset on app restart).
+        self._settings = {}
+        # Set by the UI to request cancellation of the running queue.
+        self._cancel_event = threading.Event()
+
         # Start secure local HTTP server for media files
         self._server_token = secrets.token_hex(16)
         self._server_port = self._find_free_port()
         self._start_media_server()
+
+    def save_app_settings(self, settings_json):
+        """
+        Stores the UI settings in memory for the current session.
+        They are intentionally reset on the next app restart.
+        """
+        try:
+            import json
+            self._settings = json.loads(settings_json)
+            return True
+        except Exception as e:
+            print(f"Fehler beim Speichern der Einstellungen: {e}")
+            return False
+
+    def load_app_settings(self):
+        """
+        Returns the UI settings remembered for the current session (or {} if none).
+        """
+        return self._settings
 
     def _find_free_port(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -249,10 +272,27 @@ class Api:
         """
         return self._transcripts.get(file_path, [])
 
+    def cancel_transcription(self):
+        """
+        Requests cancellation of the currently running queue. Remaining files are
+        skipped; the file being transcribed stops as soon as its current Whisper
+        pass returns (the Whisper call itself cannot be interrupted mid-file).
+        """
+        self._cancel_event.set()
+        return True
+
+    def _emit_progress(self, file_path, percent, msg):
+        """Pushes a progress update for a single file to the JS frontend."""
+        safe_msg = str(msg).replace("\\", "\\\\").replace("'", "\\'")
+        safe_file = file_path.replace("\\", "\\\\").replace("'", "\\'")
+        self._window.evaluate_js(f"onFileProgress('{safe_file}', {percent}, '{safe_msg}')")
+
     def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
         """
         Starts processing the dropped files queue in a background thread to prevent UI lockup.
         """
+        # Fresh run – clear any previous cancellation request.
+        self._cancel_event.clear()
         threading.Thread(
             target=self._process_queue,
             args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path, diarize, speaker_count, docx_trans_mode, timecode_modes),
@@ -264,38 +304,43 @@ class Api:
         """
         Processes files in the background: transcribes, translates, and writes word documents.
         """
-        for file_path in files:
+        for idx, file_path in enumerate(files):
+            # Cancellation requested: mark this and all remaining files as cancelled.
+            if self._cancel_event.is_set():
+                for remaining in files[idx:]:
+                    if os.path.exists(remaining):
+                        self._emit_progress(remaining, -2, "Abgebrochen")
+                break
+
             if not os.path.exists(file_path):
                 continue
-            
+
             file_name = os.path.basename(file_path)
-            
+
             def report_progress(percent, msg):
-                safe_msg = msg.replace("'", "\\'")
-                safe_file = file_path.replace("\\", "\\\\").replace("'", "\\'")
-                js_code = f"onFileProgress('{safe_file}', {percent}, '{safe_msg}')"
-                self._window.evaluate_js(js_code)
+                self._emit_progress(file_path, percent, msg)
 
             try:
                 # 1. Fetch metadata
                 report_progress(5, "Analysiere Datei-Metadaten...")
                 meta = get_metadata(file_path)
-                
+
                 # 2. Run Whisper Transcription
                 report_progress(10, "Lade Whisper-Modell...")
                 result = transcribe_file(
-                    file_path, 
-                    source_lang=source_lang, 
-                    target_lang=target_lang, 
+                    file_path,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
                     model_name=model_size,
                     progress_callback=report_progress,
                     diarize=diarize,
-                    speaker_count=speaker_count
+                    speaker_count=speaker_count,
+                    cancel_check=self._cancel_event.is_set
                 )
-                
+
                 # Cache the segments for the frontend player
                 self._transcripts[file_path] = result["segments"]
-                
+
                 # 3. Create one .docx per selected timecode mode in chosen output directory
                 report_progress(95, "Generiere Word-Bericht...")
 
@@ -308,7 +353,10 @@ class Api:
                     report_progress(100, f"Erstellt: {created[0]}")
                 else:
                     report_progress(100, f"{len(created)} Berichte erstellt")
-                
+
+            except TranscriptionCancelled:
+                report_progress(-2, "Abgebrochen")
+                continue
             except Exception as e:
                 print(f"Fehler bei Verarbeitung von {file_name}: {e}")
                 report_progress(-1, f"Fehler: {str(e)}")

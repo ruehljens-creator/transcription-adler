@@ -3,6 +3,12 @@ import os
 import numpy as np
 from deep_translator import GoogleTranslator
 
+
+class TranscriptionCancelled(Exception):
+    """Raised inside transcribe_file when the user requested cancellation."""
+    pass
+
+
 # Globally cache the loaded whisper models to avoid reloading them every time
 _model_cache = {}
 
@@ -136,20 +142,31 @@ def format_timestamp(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="base", progress_callback=None, diarize=False, speaker_count="2"):
+def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="base", progress_callback=None, diarize=False, speaker_count="2", cancel_check=None):
     """
     Transcribes the audio/video file.
     If target_lang is specified, it will translate the transcription.
-    
+
     progress_callback: a function that accepts (percent, status_text)
+    cancel_check: optional callable returning True when the user requested
+                  cancellation. It is polled between the (uninterruptible)
+                  Whisper pass and the post-processing steps; when it returns
+                  True a TranscriptionCancelled exception is raised.
     """
+    def _check_cancel():
+        if cancel_check and cancel_check():
+            raise TranscriptionCancelled()
+
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Datei nicht gefunden: {file_path}")
 
+    _check_cancel()
+
     if progress_callback:
         progress_callback(10, "Lade Whisper-Modell...")
-        
+
     model = get_whisper_model(model_name)
+    _check_cancel()
     
     if progress_callback:
         progress_callback(30, f"Transkribiere Datei ({os.path.basename(file_path)})...")
@@ -169,13 +186,15 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
     import torch
     kwargs["fp16"] = torch.cuda.is_available()
 
-    # Run Whisper transcription
+    # Run Whisper transcription (this call cannot be interrupted mid-file)
     result = model.transcribe(file_path, **kwargs)
-    
+    _check_cancel()
+
     raw_segments = result.get("segments", [])
     detected_lang = result.get("language", "unknown")
     
     # 2.5 Optional Speaker Diarization
+    _check_cancel()
     speaker_labels = None
     if diarize and len(raw_segments) > 0:
         if progress_callback:
@@ -266,6 +285,8 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
             print(f"Fehler beim Initialisieren von GoogleTranslator: {e}")
 
     for i, seg in enumerate(raw_segments):
+        if i % 50 == 0:
+            _check_cancel()
         start = seg["start"]
         end = seg["end"]
         original_text = seg["text"].strip()

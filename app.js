@@ -31,18 +31,41 @@ function saveSettings() {
             docxTransMode: document.getElementById('docx-trans-mode')?.value,
             timecodeModes: getSelectedTimecodeModes()
         };
-        localStorage.setItem('adler_settings', JSON.stringify(settings));
+        const json = JSON.stringify(settings);
+        // Primär Python-seitig (überlebt die Session zuverlässig, unabhängig von
+        // localStorage-Einschränkungen bei file://). localStorage als Fallback
+        // außerhalb der App (z. B. im Browser).
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.save_app_settings) {
+            window.pywebview.api.save_app_settings(json);
+        } else {
+            localStorage.setItem('adler_settings', json);
+        }
     } catch (e) {
         console.error("Fehler beim Speichern der Einstellungen:", e);
     }
 }
 
 function loadSettings() {
+    // Lädt die gemerkten Einstellungen primär aus dem Python-Backend (Session),
+    // sonst aus localStorage (außerhalb der App).
     try {
-        const data = localStorage.getItem('adler_settings');
-        if (!data) return;
-        const settings = JSON.parse(data);
-        
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.load_app_settings) {
+            window.pywebview.api.load_app_settings()
+                .then(settings => applySettings(settings))
+                .catch(err => console.error("Fehler beim Laden der Einstellungen (API):", err));
+        } else {
+            const data = localStorage.getItem('adler_settings');
+            if (data) applySettings(JSON.parse(data));
+        }
+    } catch (e) {
+        console.error("Fehler beim Laden der Einstellungen:", e);
+    }
+}
+
+function applySettings(settings) {
+    try {
+        if (!settings || typeof settings !== 'object') return;
+
         const srcSelect = document.getElementById('source-lang');
         if (srcSelect && settings.sourceLang) srcSelect.value = settings.sourceLang;
         
@@ -130,6 +153,7 @@ const targetLangWrapper = document.getElementById('target-lang-wrapper');
 const targetLangSelect = document.getElementById('target-lang');
 const modelSizeSelect = document.getElementById('model-size');
 const startBtn = document.getElementById('start-btn');
+const cancelBtn = document.getElementById('cancel-btn');
 const clearBtn = document.getElementById('clear-btn');
 const browseBtn = document.getElementById('browse-btn');
 const dropZone = document.getElementById('drop-zone');
@@ -461,6 +485,7 @@ function createStatusCell(file) {
     else if (file.status === 'processing') statusText = `${file.progress}%`;
     else if (file.status === 'completed') statusText = 'Fertig';
     else if (file.status === 'failed') statusText = 'Fehler';
+    else if (file.status === 'cancelled') statusText = 'Abgebrochen';
 
     badge.textContent = statusText;
     statusContainer.appendChild(badge);
@@ -553,6 +578,10 @@ startBtn.addEventListener('click', () => {
     isProcessing = true;
     updateStartButtonState();
     clearBtn.hidden = true;
+    if (cancelBtn) {
+        cancelBtn.hidden = false;
+        cancelBtn.disabled = false;
+    }
 
     fileQueue.forEach(f => {
         if (f.status !== 'completed') {
@@ -577,6 +606,20 @@ startBtn.addEventListener('click', () => {
 });
 
 // ------------------------------------------------------------
+// Transkription abbrechen
+// ------------------------------------------------------------
+if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+        if (!isProcessing) return;
+        cancelBtn.disabled = true;
+        announce('Abbruch angefordert. Verbleibende Dateien werden übersprungen, die laufende Datei wird beendet.');
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.cancel_transcription) {
+            window.pywebview.api.cancel_transcription();
+        }
+    });
+}
+
+// ------------------------------------------------------------
 // Fortschritts-Callback aus Python
 // ------------------------------------------------------------
 window.onFileProgress = function (filePath, percent, statusMsg) {
@@ -595,6 +638,11 @@ window.onFileProgress = function (filePath, percent, statusMsg) {
         file.progress = 0;
         file.statusMsg = statusMsg || 'Fehlgeschlagen';
         if (wasNotCompleted) announce(`${file.name}: Fehler – ${file.statusMsg}`);
+    } else if (percent === -2) {
+        file.status = 'cancelled';
+        file.progress = 0;
+        file.statusMsg = statusMsg || 'Abgebrochen';
+        if (wasNotCompleted) announce(`${file.name}: abgebrochen.`);
     } else {
         file.status = 'processing';
         file.progress = percent;
@@ -614,7 +662,12 @@ window.onFileProgress = function (filePath, percent, statusMsg) {
         isProcessing = false;
         updateStartButtonState();
         clearBtn.hidden = false;
-        announce('Alle Verarbeitungen abgeschlossen.');
+        if (cancelBtn) {
+            cancelBtn.hidden = true;
+            cancelBtn.disabled = false;
+        }
+        const anyCancelled = fileQueue.some(f => f.status === 'cancelled');
+        announce(anyCancelled ? 'Verarbeitung abgebrochen.' : 'Alle Verarbeitungen abgeschlossen.');
     }
 };
 
@@ -1326,8 +1379,12 @@ function setupPlayerSync(player, segments) {
 }
 
 // Binden von Event Listeners für Details Panel
+// Falls die Python-API erst nach dem DOM bereitsteht: dann (erneut) laden.
+window.addEventListener('pywebviewready', loadSettings);
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Einstellungen laden
+    // Einstellungen laden (greift auf localStorage, falls API noch nicht bereit;
+    // der pywebviewready-Listener lädt anschließend die Session-Werte aus Python).
     loadSettings();
 
     // Listeners for setting changes

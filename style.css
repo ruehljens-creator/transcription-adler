@@ -598,6 +598,12 @@ body {
     border: 1px solid rgba(248, 113, 113, 0.35);
 }
 
+.status-badge.cancelled {
+    background: rgba(167, 180, 200, 0.18);
+    color: var(--text-secondary);
+    border: 1px solid rgba(167, 180, 200, 0.35);
+}
+
 /* Fortschrittsbalken */
 .progress-bar-container {
     width: 140px;

@@ -82,6 +82,15 @@
                 Diese Schaltfläche ist nur aktiv, wenn Dateien in der Warteschlange sind.
             </p>
 
+            <button id="cancel-btn" type="button" class="btn btn-secondary" hidden aria-describedby="cancel-help">
+                <span class="btn-icon" aria-hidden="true">■</span>
+                Abbrechen
+            </button>
+            <p id="cancel-help" class="sr-only">
+                Bricht die laufende Transkription ab. Noch nicht begonnene Dateien werden übersprungen;
+                die gerade verarbeitete Datei wird beendet, sobald ihr aktueller Durchlauf abgeschlossen ist.
+            </p>
+
             <div class="sidebar-footer">
                 <p>
                     <span aria-hidden="true">🔒</span>
