@@ -1258,6 +1258,42 @@ function closeDetailPanel() {
     currentPlayingFile = null;
 }
 
+// ------------------------------------------------------------
+// Aktuelles Projekt speichern (.adler): Transkript, Video-Verknüpfung und
+// Schnittmarken. Beim späteren Öffnen der .adler-Datei werden Player und
+// synchroner Text wiederhergestellt.
+// ------------------------------------------------------------
+function saveCurrentProject() {
+    if (!currentPlayingFile) {
+        showCutMessage("Kein Projekt geöffnet. Bitte zuerst eine transkribierte Datei öffnen.", "error");
+        return;
+    }
+    const segments = currentPlayingFile.segments || [];
+    const cuts = currentPlayingFile.cuts || [];
+
+    showCutMessage("Projekt wird gespeichert...", "");
+
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.save_project_file) {
+        window.pywebview.api.save_project_file(
+            currentPlayingFile.path,
+            JSON.stringify(segments),
+            JSON.stringify(cuts)
+        ).then(result => {
+            if (result && result.success) {
+                showCutMessage(`Projekt gespeichert: ${result.filename}`, "success");
+                announce(`Projekt erfolgreich gespeichert unter ${result.filename}`);
+            } else {
+                showCutMessage(`Fehler beim Speichern: ${result.error || 'Abgebrochen'}`, "error");
+            }
+        }).catch(err => {
+            console.error("Fehler bei save_project_file:", err);
+            showCutMessage("Fehler beim Aufruf der Python-API.", "error");
+        });
+    } else {
+        showCutMessage("Fehler: Keine App-Verbindung verfügbar.", "error");
+    }
+}
+
 function renderTranscriptSegments(file) {
     const listContainer = document.getElementById('transcript-segments-list');
     if (!listContainer || !file.segments) return;
@@ -1475,33 +1511,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (btnSaveProject) {
-        btnSaveProject.addEventListener('click', () => {
-            if (!currentPlayingFile) return;
-            const segments = currentPlayingFile.segments || [];
-            const cuts = currentPlayingFile.cuts || [];
-            
-            showCutMessage("Projekt wird gespeichert...", "");
-            
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.save_project_file(
-                    currentPlayingFile.path,
-                    JSON.stringify(segments),
-                    JSON.stringify(cuts)
-                ).then(result => {
-                    if (result && result.success) {
-                        showCutMessage(`Projekt gespeichert: ${result.filename}`, "success");
-                        announce(`Projekt erfolgreich gespeichert unter ${result.filename}`);
-                    } else {
-                        showCutMessage(`Fehler beim Speichern: ${result.error || 'Abgebrochen'}`, "error");
-                    }
-                }).catch(err => {
-                    console.error("Fehler bei save_project_file:", err);
-                    showCutMessage("Fehler beim Aufruf der Python-API.", "error");
-                });
-            } else {
-                showCutMessage("Fehler: Keine App-Verbindung verfügbar.", "error");
-            }
-        });
+        btnSaveProject.addEventListener('click', saveCurrentProject);
+    }
+
+    const btnSaveProjectHeader = document.getElementById('btn-save-project-header');
+    if (btnSaveProjectHeader) {
+        btnSaveProjectHeader.addEventListener('click', saveCurrentProject);
     }
     if (btnUpdate) {
         btnUpdate.addEventListener('click', () => {

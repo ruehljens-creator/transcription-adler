@@ -47,24 +47,49 @@ class Api:
     def __init__(self):
         self._window = None
         self._transcripts = {}
-        # UI settings remembered for the current session (reset on app restart).
-        self._settings = {}
         # Set by the UI to request cancellation of the running queue.
         self._cancel_event = threading.Event()
+
+        # UI settings, persisted to disk so they survive app restarts.
+        self._settings_path = self._get_settings_path()
+        self._settings = self._read_settings_file()
 
         # Start secure local HTTP server for media files
         self._server_token = secrets.token_hex(16)
         self._server_port = self._find_free_port()
         self._start_media_server()
 
+    @staticmethod
+    def _get_settings_path():
+        """Returns the path to the persisted settings file (in the user profile)."""
+        base = os.environ.get('APPDATA') or os.path.expanduser('~')
+        folder = os.path.join(base, 'TranscriptionAdler')
+        try:
+            os.makedirs(folder, exist_ok=True)
+        except Exception:
+            folder = base
+        return os.path.join(folder, 'settings.json')
+
+    def _read_settings_file(self):
+        """Loads persisted settings from disk; returns {} if none/unreadable."""
+        try:
+            if os.path.exists(self._settings_path):
+                import json
+                with open(self._settings_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Fehler beim Lesen der Einstellungsdatei: {e}")
+        return {}
+
     def save_app_settings(self, settings_json):
         """
-        Stores the UI settings in memory for the current session.
-        They are intentionally reset on the next app restart.
+        Stores the UI settings and persists them to disk so they survive a restart.
         """
         try:
             import json
             self._settings = json.loads(settings_json)
+            with open(self._settings_path, 'w', encoding='utf-8') as f:
+                json.dump(self._settings, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
             print(f"Fehler beim Speichern der Einstellungen: {e}")
@@ -72,7 +97,7 @@ class Api:
 
     def load_app_settings(self):
         """
-        Returns the UI settings remembered for the current session (or {} if none).
+        Returns the persisted UI settings (or {} if none have been saved yet).
         """
         return self._settings
 
