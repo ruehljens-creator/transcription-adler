@@ -1,10 +1,16 @@
 import sys
 import os
 
-# If running as a bundled executable, add the bundle folder to PATH
-# so that the application and libraries (like Whisper) can locate bundled ffmpeg/ffprobe.
+# Make the bundled ffmpeg/ffprobe discoverable for subprocess calls (used by
+# metadata extraction and Whisper's audio loading). When frozen, they live next
+# to the executable in sys._MEIPASS; when running from source, they live in the
+# project folder. Windows does not reliably search the current working directory
+# for bare command names, so we prepend the right folder to PATH explicitly.
 if getattr(sys, 'frozen', False):
-    os.environ["PATH"] = sys._MEIPASS + os.pathsep + os.environ.get("PATH", "")
+    _bin_dir = sys._MEIPASS
+else:
+    _bin_dir = os.path.dirname(os.path.abspath(__file__))
+os.environ["PATH"] = _bin_dir + os.pathsep + os.environ.get("PATH", "")
 
 import webview
 import threading
