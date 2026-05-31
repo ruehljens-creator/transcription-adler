@@ -92,6 +92,23 @@ class Api:
             "token": self._server_token
         }
 
+    @staticmethod
+    def _resolve_output_docx(file_path, output_dir_type, custom_path):
+        """
+        Determines where the generated .docx report should be written, based on
+        the user's output preference (desktop / custom folder / next to source).
+        """
+        name_without_ext, _ = os.path.splitext(os.path.basename(file_path))
+        output_name = f"{name_without_ext}_transkript.docx"
+
+        if output_dir_type == "desktop":
+            return os.path.join(os.path.expanduser("~"), "Desktop", output_name)
+        if output_dir_type == "custom" and custom_path and os.path.isdir(custom_path):
+            return os.path.join(custom_path, output_name)
+        # Default: alongside the source file
+        base_path, _ = os.path.splitext(file_path)
+        return f"{base_path}_transkript.docx"
+
     def update_docx_with_cuts(self, file_path, cuts_json, output_dir_type="source", custom_path="", target_lang=None, docx_trans_mode="both"):
         """
         Re-generates the Word Document, highlighting the list of cuts in the segments table.
@@ -109,20 +126,9 @@ class Api:
             cuts_list = json.loads(cuts_json)  # Parses list of [start, end] pairs
             
             meta = get_metadata(file_path)
-            
-            base_name = os.path.basename(file_path)
-            name_without_ext, _ = os.path.splitext(base_name)
-            output_name = f"{name_without_ext}_transkript.docx"
-            
-            if output_dir_type == "desktop":
-                desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-                output_docx = os.path.join(desktop_path, output_name)
-            elif output_dir_type == "custom" and custom_path and os.path.isdir(custom_path):
-                output_docx = os.path.join(custom_path, output_name)
-            else:
-                base_path, _ = os.path.splitext(file_path)
-                output_docx = f"{base_path}_transkript.docx"
-                
+
+            output_docx = self._resolve_output_docx(file_path, output_dir_type, custom_path)
+
             create_docx(
                 output_docx, 
                 meta, 
@@ -238,21 +244,9 @@ class Api:
                 
                 # 3. Create .docx file in chosen output directory
                 report_progress(95, "Generiere Word-Bericht...")
-                
-                base_name = os.path.basename(file_path)
-                name_without_ext, _ = os.path.splitext(base_name)
-                output_name = f"{name_without_ext}_transkript.docx"
-                
-                if output_dir_type == "desktop":
-                    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-                    output_docx = os.path.join(desktop_path, output_name)
-                elif output_dir_type == "custom" and custom_path and os.path.isdir(custom_path):
-                    output_docx = os.path.join(custom_path, output_name)
-                else:
-                    # Default: source folder
-                    base_path, _ = os.path.splitext(file_path)
-                    output_docx = f"{base_path}_transkript.docx"
-                
+
+                output_docx = self._resolve_output_docx(file_path, output_dir_type, custom_path)
+
                 create_docx(output_docx, meta, result["segments"], target_lang=target_lang, docx_trans_mode=docx_trans_mode)
                 
                 report_name = os.path.basename(output_docx)

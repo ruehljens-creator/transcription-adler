@@ -13,7 +13,13 @@ def get_whisper_model(model_name="base"):
     """
     if model_name not in _model_cache:
         import torch
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        # Prefer CUDA (NVIDIA), then MPS (Apple Silicon), otherwise CPU.
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
         
         # Check if the model weights are bundled in the PyInstaller executable
         model_path = model_name
@@ -158,7 +164,11 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
     use_native_translation = (target_lang == "en")
     if use_native_translation:
         kwargs["task"] = "translate"
-        
+
+    # fp16 only pays off on CUDA; on CPU it is unsupported (and Whisper warns).
+    import torch
+    kwargs["fp16"] = torch.cuda.is_available()
+
     # Run Whisper transcription
     result = model.transcribe(file_path, **kwargs)
     
@@ -228,31 +238,43 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
     # Check if translation is needed and it's not Whisper's native translation to English
     translate_needed = target_lang and target_lang != detected_lang and not use_native_translation
     
-    translator = None
+    # Translate all segments up front in a single batched request. This replaces
+    # one network round-trip per segment with one call for the whole file, which
+    # is dramatically faster on long recordings.
+    translations = {}
     if translate_needed:
         if progress_callback:
             progress_callback(80, f"Übersetze Text in Zielsprache '{target_lang}'...")
         try:
             translator = GoogleTranslator(source='auto', target=target_lang)
+            pairs = [(i, seg["text"].strip()) for i, seg in enumerate(raw_segments) if seg["text"].strip()]
+            if pairs:
+                indices = [i for i, _ in pairs]
+                originals = [t for _, t in pairs]
+                try:
+                    results = translator.translate_batch(originals)
+                    translations = {i: (t or orig) for i, t, orig in zip(indices, results, originals)}
+                except Exception as batch_err:
+                    print(f"Batch-Übersetzung fehlgeschlagen, Einzelübersetzung als Fallback: {batch_err}")
+                    for i, text in pairs:
+                        try:
+                            translations[i] = translator.translate(text) or text
+                        except Exception as seg_err:
+                            print(f"Übersetzungsfehler in Segment {i}: {seg_err}")
+                            translations[i] = text
         except Exception as e:
             print(f"Fehler beim Initialisieren von GoogleTranslator: {e}")
-            
+
     for i, seg in enumerate(raw_segments):
         start = seg["start"]
         end = seg["end"]
         original_text = seg["text"].strip()
-        
+
         # Get speaker label
         speaker = speaker_labels.get(i, "") if speaker_labels else ""
-        
-        translated_text = ""
-        if translate_needed and translator and original_text:
-            try:
-                translated_text = translator.translate(original_text)
-            except Exception as e:
-                print(f"Übersetzungsfehler in Segment {i}: {e}")
-                translated_text = original_text # Fallback to original text
-                
+
+        translated_text = translations.get(i, "")
+
         processed_segments.append({
             "start": start,
             "end": end,
