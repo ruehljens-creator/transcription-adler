@@ -110,9 +110,20 @@ echo laeuft ohne weitere Installation auf Windows 10/11 (64 Bit).
 echo.
 
 REM ---------- Optionaler Inno-Setup-Schritt ----------
-if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
-    echo Inno Setup gefunden – erstelle Installer...
-    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+REM ISCC.exe an den ueblichen Orten suchen (auch Pro-Benutzer-Installation).
+set "ISCC="
+for %%P in (
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    "C:\Program Files\Inno Setup 6\ISCC.exe"
+    "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+) do (
+    if not defined ISCC if exist "%%~P" set "ISCC=%%~P"
+)
+
+if defined ISCC (
+    echo Inno Setup gefunden: !ISCC!
+    echo Erstelle Installer...
+    "!ISCC!" installer.iss
     if not errorlevel 1 (
         echo Setup-Datei erstellt: TranscriptionAdler_Setup.exe
     )
