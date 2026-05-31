@@ -368,6 +368,7 @@ function renderQueue() {
 
     fileQueue.forEach(file => {
         const tr = document.createElement('tr');
+        tr.dataset.path = file.path;
 
         // Clickable row for completed transcriptions
         if (file.status === 'completed') {
@@ -421,62 +422,94 @@ function renderQueue() {
         }
         tr.appendChild(tdLoc);
 
-        // Status
-        const tdStatus = document.createElement('td');
-        const statusContainer = document.createElement('div');
-        statusContainer.className = 'status-cell-container';
-        tdStatus.appendChild(statusContainer);
-
-        const badge = document.createElement('div');
-        badge.className = `status-badge ${file.status}`;
-
-        let statusText = '';
-        if (file.status === 'queued') statusText = 'Wartet';
-        else if (file.status === 'processing') statusText = `${file.progress}%`;
-        else if (file.status === 'completed') statusText = 'Fertig';
-        else if (file.status === 'failed') statusText = 'Fehler';
-
-        badge.textContent = statusText;
-        statusContainer.appendChild(badge);
-
-        if (file.status === 'completed') {
-            const playBtn = document.createElement('button');
-            playBtn.type = 'button';
-            playBtn.className = 'btn-play-row';
-            playBtn.innerHTML = '<span aria-hidden="true">▶</span> Abspielen';
-            playBtn.setAttribute('aria-label', `Transkript und Player für ${file.name} öffnen`);
-            playBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openDetailPanel(file);
-            });
-            statusContainer.appendChild(playBtn);
-        }
-
-        if (file.status === 'processing') {
-            const barContainer = document.createElement('div');
-            barContainer.className = 'progress-bar-container';
-            barContainer.setAttribute('role', 'progressbar');
-            barContainer.setAttribute('aria-valuemin', '0');
-            barContainer.setAttribute('aria-valuemax', '100');
-            barContainer.setAttribute('aria-valuenow', file.progress);
-            barContainer.setAttribute('aria-label', `Fortschritt für ${file.name}`);
-            const fill = document.createElement('div');
-            fill.className = 'progress-bar-fill';
-            fill.style.width = `${file.progress}%`;
-            barContainer.appendChild(fill);
-            statusContainer.appendChild(barContainer);
-        }
-
-        if (file.statusMsg && file.status !== 'queued') {
-            const msgLabel = document.createElement('div');
-            msgLabel.className = 'status-msg';
-            msgLabel.textContent = file.statusMsg;
-            statusContainer.appendChild(msgLabel);
-        }
-
-        tr.appendChild(tdStatus);
+        // Status (eigene Zelle – kann gezielt einzeln aktualisiert werden)
+        tr.appendChild(createStatusCell(file));
         queueTbody.appendChild(tr);
     });
+}
+
+// ------------------------------------------------------------
+// Statuszelle einer Datei aufbauen (Badge, Fortschrittsbalken, Abspiel-Button)
+// ------------------------------------------------------------
+function createStatusCell(file) {
+    const tdStatus = document.createElement('td');
+    const statusContainer = document.createElement('div');
+    statusContainer.className = 'status-cell-container';
+    tdStatus.appendChild(statusContainer);
+
+    const badge = document.createElement('div');
+    badge.className = `status-badge ${file.status}`;
+
+    let statusText = '';
+    if (file.status === 'queued') statusText = 'Wartet';
+    else if (file.status === 'processing') statusText = `${file.progress}%`;
+    else if (file.status === 'completed') statusText = 'Fertig';
+    else if (file.status === 'failed') statusText = 'Fehler';
+
+    badge.textContent = statusText;
+    statusContainer.appendChild(badge);
+
+    if (file.status === 'completed') {
+        const playBtn = document.createElement('button');
+        playBtn.type = 'button';
+        playBtn.className = 'btn-play-row';
+        playBtn.innerHTML = '<span aria-hidden="true">▶</span> Abspielen';
+        playBtn.setAttribute('aria-label', `Transkript und Player für ${file.name} öffnen`);
+        playBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDetailPanel(file);
+        });
+        statusContainer.appendChild(playBtn);
+    }
+
+    if (file.status === 'processing') {
+        const barContainer = document.createElement('div');
+        barContainer.className = 'progress-bar-container';
+        barContainer.setAttribute('role', 'progressbar');
+        barContainer.setAttribute('aria-valuemin', '0');
+        barContainer.setAttribute('aria-valuemax', '100');
+        barContainer.setAttribute('aria-valuenow', file.progress);
+        barContainer.setAttribute('aria-label', `Fortschritt für ${file.name}`);
+        const fill = document.createElement('div');
+        fill.className = 'progress-bar-fill';
+        fill.style.width = `${file.progress}%`;
+        barContainer.appendChild(fill);
+        statusContainer.appendChild(barContainer);
+    }
+
+    if (file.statusMsg && file.status !== 'queued') {
+        const msgLabel = document.createElement('div');
+        msgLabel.className = 'status-msg';
+        msgLabel.textContent = file.statusMsg;
+        statusContainer.appendChild(msgLabel);
+    }
+
+    return tdStatus;
+}
+
+// ------------------------------------------------------------
+// Nur die Statuszelle einer einzelnen Zeile neu rendern (für häufige
+// Fortschritts-Ticks – vermeidet den teuren Neuaufbau der ganzen Tabelle).
+// ------------------------------------------------------------
+function updateRowStatus(file) {
+    let targetRow = null;
+    for (const row of queueTbody.children) {
+        if (row.dataset && row.dataset.path === file.path) {
+            targetRow = row;
+            break;
+        }
+    }
+    if (!targetRow) {
+        renderQueue();
+        return;
+    }
+    const oldCell = targetRow.lastElementChild;
+    const newCell = createStatusCell(file);
+    if (oldCell) {
+        targetRow.replaceChild(newCell, oldCell);
+    } else {
+        targetRow.appendChild(newCell);
+    }
 }
 
 // ------------------------------------------------------------
@@ -551,7 +584,13 @@ window.onFileProgress = function (filePath, percent, statusMsg) {
         file.statusMsg = statusMsg || 'Wird verarbeitet…';
     }
 
-    renderQueue();
+    // Beim Fertigwerden wird die Zeile klickbar/abspielbar -> volles Rendern.
+    // Häufige Fortschritts-Ticks aktualisieren nur die betroffene Statuszelle.
+    if (percent === 100) {
+        renderQueue();
+    } else {
+        updateRowStatus(file);
+    }
 
     const stillRunning = fileQueue.some(f => f.status === 'processing');
     if (!stillRunning) {
@@ -743,7 +782,7 @@ function addCut() {
     currentPlayingFile.cuts = currentPlayingFile.cuts || [];
     
     // Generiere eindeutige ID
-    const id = Date.now() + Math.random().toString(36).substr(2, 9);
+    const id = Date.now() + Math.random().toString(36).slice(2, 11);
     currentPlayingFile.cuts.push({
         id: id,
         start: cutInTime,
@@ -1044,7 +1083,6 @@ function openDetailPanel(file) {
     }
     
     renderCutList();
-    panel.setAttribute('aria-hidden', 'false');
 
     // Linke Spalte schmaler machen
     const leftCol = document.querySelector('.dashboard-left');
@@ -1435,28 +1473,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const showTranslatedBtn = document.getElementById('show-translated-btn');
 
     if (showBothBtn && showOriginalBtn && showTranslatedBtn) {
-        showBothBtn.addEventListener('click', () => {
-            currentTranscriptLanguage = 'both';
-            showBothBtn.classList.add('active');
-            showOriginalBtn.classList.remove('active');
-            showTranslatedBtn.classList.remove('active');
-            if (currentPlayingFile) renderTranscriptSegments(currentPlayingFile);
-        });
+        const langButtons = [
+            [showBothBtn, 'both'],
+            [showOriginalBtn, 'original'],
+            [showTranslatedBtn, 'translated']
+        ];
 
-        showOriginalBtn.addEventListener('click', () => {
-            currentTranscriptLanguage = 'original';
-            showBothBtn.classList.remove('active');
-            showOriginalBtn.classList.add('active');
-            showTranslatedBtn.classList.remove('active');
+        function selectLanguage(mode) {
+            currentTranscriptLanguage = mode;
+            langButtons.forEach(([btn, btnMode]) => {
+                const isActive = btnMode === mode;
+                btn.classList.toggle('active', isActive);
+                btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
             if (currentPlayingFile) renderTranscriptSegments(currentPlayingFile);
-        });
+        }
 
-        showTranslatedBtn.addEventListener('click', () => {
-            currentTranscriptLanguage = 'translated';
-            showBothBtn.classList.remove('active');
-            showOriginalBtn.classList.remove('active');
-            showTranslatedBtn.classList.add('active');
-            if (currentPlayingFile) renderTranscriptSegments(currentPlayingFile);
+        langButtons.forEach(([btn, btnMode]) => {
+            btn.addEventListener('click', () => selectLanguage(btnMode));
         });
     }
 });

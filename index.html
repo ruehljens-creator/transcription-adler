@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transcription Adler – Offline Transkription und Übersetzung</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Keine externen Web-Fonts: Die App läuft vollständig offline. Die CSS-Schrift-Stacks
+         nutzen ohnehin zuerst System-Fonts (Segoe UI auf Windows, -apple-system auf macOS). -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -209,10 +208,10 @@
                         <div class="detail-transcript-col">
                             <div class="transcript-header">
                                 <h4>Transkript</h4>
-                                <div class="lang-toggle-container" id="lang-toggle-container" style="display:none;">
-                                    <button id="show-both-btn" class="btn btn-lang active">Beide</button>
-                                    <button id="show-original-btn" class="btn btn-lang">Original</button>
-                                    <button id="show-translated-btn" class="btn btn-lang">Übersetzung</button>
+                                <div class="lang-toggle-container" id="lang-toggle-container" role="group" aria-label="Anzeige der Transkript-Sprache" style="display:none;">
+                                    <button id="show-both-btn" type="button" class="btn btn-lang active" aria-pressed="true">Beide</button>
+                                    <button id="show-original-btn" type="button" class="btn btn-lang" aria-pressed="false">Original</button>
+                                    <button id="show-translated-btn" type="button" class="btn btn-lang" aria-pressed="false">Übersetzung</button>
                                 </div>
                             </div>
                             <div id="transcript-segments-list" class="transcript-segments-list">
