@@ -1513,11 +1513,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSaveProject) {
         btnSaveProject.addEventListener('click', saveCurrentProject);
     }
-
-    const btnSaveProjectHeader = document.getElementById('btn-save-project-header');
-    if (btnSaveProjectHeader) {
-        btnSaveProjectHeader.addEventListener('click', saveCurrentProject);
-    }
     if (btnUpdate) {
         btnUpdate.addEventListener('click', () => {
             if (!currentPlayingFile) return;

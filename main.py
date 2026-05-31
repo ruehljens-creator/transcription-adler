@@ -397,9 +397,9 @@ class Api:
             
             file_types = ('Transcription Adler Project (*.adler)', 'All files (*.*)')
             save_path = self._window.create_file_dialog(
-                webview.SAVE_DIALOG, 
-                directory=os.path.dirname(video_path), 
-                file_name=default_filename, 
+                webview.SAVE_DIALOG,
+                directory=os.path.dirname(video_path),
+                save_filename=default_filename,
                 file_types=file_types
             )
             if not save_path:
@@ -423,6 +423,9 @@ class Api:
                 
             return {"success": True, "filename": os.path.basename(save_path)}
         except Exception as e:
+            import traceback
+            print("Fehler in save_project_file:")
+            traceback.print_exc()
             return {"success": False, "error": str(e)}
 
     def load_project_file(self, project_path):
