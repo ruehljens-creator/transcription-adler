@@ -7,6 +7,11 @@ let fileQueue = [];
 let isProcessing = false;
 let customOutputPath = '';
 
+// Vom Benutzer aktivierte Zusatzsprachen ([{code, name}]) und die vollen Listen.
+let extraRecognitionLangs = [];
+let extraTranslationLangs = [];
+let supportedLangs = { recognition: [], translation: [] };
+
 // Liefert die aktuell gewählten Zeitstempel-Modi (Mehrfachauswahl).
 // Fällt auf ['every'] zurück, falls nichts ausgewählt ist.
 function getSelectedTimecodeModes() {
@@ -14,6 +19,100 @@ function getSelectedTimecodeModes() {
         .filter(cb => cb.checked)
         .map(cb => cb.value);
     return modes.length > 0 ? modes : ['every'];
+}
+
+// ------------------------------------------------------------
+// Sprachverwaltung: zusätzliche Erkennungs-/Übersetzungssprachen
+// ------------------------------------------------------------
+function getMainLangSelect(kind) {
+    return document.getElementById(kind === 'recognition' ? 'source-lang' : 'target-lang');
+}
+function getExtraLangs(kind) {
+    return kind === 'recognition' ? extraRecognitionLangs : extraTranslationLangs;
+}
+function selectHasOption(select, code) {
+    return select && Array.from(select.options).some(o => o.value === code);
+}
+function appendLangOption(select, code, name) {
+    if (!select || !code || selectHasOption(select, code)) return;
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = name;
+    select.appendChild(opt);
+}
+function renderLangChips(kind) {
+    const container = document.getElementById(kind === 'recognition' ? 'recognition-lang-chips' : 'translation-lang-chips');
+    if (!container) return;
+    container.innerHTML = '';
+    getExtraLangs(kind).forEach(lang => {
+        const chip = document.createElement('span');
+        chip.className = 'lang-chip';
+        const label = document.createElement('span');
+        label.textContent = lang.name;
+        chip.appendChild(label);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lang-chip-remove';
+        btn.setAttribute('aria-label', `${lang.name} entfernen`);
+        btn.innerHTML = '&times;';
+        btn.addEventListener('click', () => removeExtraLang(kind, lang.code));
+        chip.appendChild(btn);
+        container.appendChild(chip);
+    });
+}
+function addExtraLang(kind) {
+    const sel = document.getElementById(kind === 'recognition' ? 'manage-recognition-select' : 'manage-translation-select');
+    if (!sel || !sel.value) return;
+    const code = sel.value;
+    const name = sel.options[sel.selectedIndex].textContent;
+    const mainSel = getMainLangSelect(kind);
+    if (selectHasOption(mainSel, code)) {
+        announce('Diese Sprache ist bereits verfügbar.');
+        return;
+    }
+    getExtraLangs(kind).push({ code, name });
+    appendLangOption(mainSel, code, name);
+    renderLangChips(kind);
+    saveSettings();
+    announce(`${name} hinzugefügt.`);
+}
+function removeExtraLang(kind, code) {
+    const extras = getExtraLangs(kind);
+    const idx = extras.findIndex(l => l.code === code);
+    if (idx === -1) return;
+    const removed = extras.splice(idx, 1)[0];
+    const mainSel = getMainLangSelect(kind);
+    const opt = mainSel && Array.from(mainSel.options).find(o => o.value === code);
+    if (opt) {
+        const wasSelected = mainSel.value === code;
+        opt.remove();
+        if (wasSelected && mainSel.options.length > 0) mainSel.selectedIndex = 0;
+    }
+    renderLangChips(kind);
+    saveSettings();
+    announce(`${removed ? removed.name : 'Sprache'} entfernt.`);
+}
+function populateManageSelect(kind) {
+    const sel = document.getElementById(kind === 'recognition' ? 'manage-recognition-select' : 'manage-translation-select');
+    if (!sel) return;
+    sel.innerHTML = '';
+    (kind === 'recognition' ? supportedLangs.recognition : supportedLangs.translation).forEach(lang => {
+        const opt = document.createElement('option');
+        opt.value = lang.code;
+        opt.textContent = lang.name;
+        sel.appendChild(opt);
+    });
+}
+function loadSupportedLanguages() {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_supported_languages) {
+        window.pywebview.api.get_supported_languages().then(langs => {
+            if (langs) {
+                supportedLangs = langs;
+                populateManageSelect('recognition');
+                populateManageSelect('translation');
+            }
+        }).catch(err => console.error('Fehler beim Laden der Sprachlisten:', err));
+    }
 }
 
 function saveSettings() {
@@ -29,7 +128,9 @@ function saveSettings() {
             diarizationEnable: document.getElementById('diarization-enable')?.checked,
             speakerCount: document.getElementById('speaker-count')?.value,
             docxTransMode: document.getElementById('docx-trans-mode')?.value,
-            timecodeModes: getSelectedTimecodeModes()
+            timecodeModes: getSelectedTimecodeModes(),
+            extraRecognitionLangs: extraRecognitionLangs,
+            extraTranslationLangs: extraTranslationLangs
         };
         const json = JSON.stringify(settings);
         // Primär Python-seitig (überlebt die Session zuverlässig, unabhängig von
@@ -65,6 +166,15 @@ function loadSettings() {
 function applySettings(settings) {
     try {
         if (!settings || typeof settings !== 'object') return;
+
+        // Zusatzsprachen zuerst wiederherstellen, damit die gespeicherte Quell-/
+        // Zielsprache (ggf. eine Zusatzsprache) als Option vorhanden ist.
+        extraRecognitionLangs = Array.isArray(settings.extraRecognitionLangs) ? settings.extraRecognitionLangs : [];
+        extraTranslationLangs = Array.isArray(settings.extraTranslationLangs) ? settings.extraTranslationLangs : [];
+        extraRecognitionLangs.forEach(l => appendLangOption(getMainLangSelect('recognition'), l.code, l.name));
+        extraTranslationLangs.forEach(l => appendLangOption(getMainLangSelect('translation'), l.code, l.name));
+        renderLangChips('recognition');
+        renderLangChips('translation');
 
         const srcSelect = document.getElementById('source-lang');
         if (srcSelect && settings.sourceLang) srcSelect.value = settings.sourceLang;
@@ -236,6 +346,24 @@ browseBtn.addEventListener('click', () => {
         });
     }
 });
+
+// ------------------------------------------------------------
+// Projekt öffnen (.adler) – stellt Player und synchronen Text wieder her
+// ------------------------------------------------------------
+const openProjectBtn = document.getElementById('open-project-btn');
+if (openProjectBtn) {
+    openProjectBtn.addEventListener('click', () => {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.open_project_file_dialog) {
+            window.pywebview.api.open_project_file_dialog().then(path => {
+                if (path) {
+                    // .adler-Pfad -> addFileToQueue erkennt die Endung und lädt das Projekt
+                    addFileToQueue(path);
+                    announce('Projekt wird geladen…');
+                }
+            }).catch(err => console.error('Fehler beim Öffnen des Projekts:', err));
+        }
+    });
+}
 
 // ------------------------------------------------------------
 // Liste leeren
@@ -1417,11 +1545,19 @@ function setupPlayerSync(player, segments) {
 // Binden von Event Listeners für Details Panel
 // Falls die Python-API erst nach dem DOM bereitsteht: dann (erneut) laden.
 window.addEventListener('pywebviewready', loadSettings);
+window.addEventListener('pywebviewready', loadSupportedLanguages);
 
 document.addEventListener('DOMContentLoaded', () => {
     // Einstellungen laden (greift auf localStorage, falls API noch nicht bereit;
     // der pywebviewready-Listener lädt anschließend die Session-Werte aus Python).
     loadSettings();
+    loadSupportedLanguages();
+
+    // Sprachverwaltung: Hinzufügen-Buttons
+    const addRecBtn = document.getElementById('add-recognition-lang');
+    if (addRecBtn) addRecBtn.addEventListener('click', () => addExtraLang('recognition'));
+    const addTransBtn = document.getElementById('add-translation-lang');
+    if (addTransBtn) addTransBtn.addEventListener('click', () => addExtraLang('translation'));
 
     // Listeners for setting changes
     const idsToSave = ['source-lang', 'target-lang', 'model-size', 'output-dir-type', 'diarization-enable', 'speaker-count', 'docx-trans-mode'];

@@ -297,6 +297,51 @@ class Api:
         """
         return self._transcripts.get(file_path, [])
 
+    def open_project_file_dialog(self):
+        """
+        Opens a dialog filtered to .adler project files and returns the chosen path
+        (or '' if cancelled). The frontend then loads it like a dropped .adler file.
+        """
+        try:
+            file_types = ('Transcription Adler Projekt (*.adler)', 'All files (*.*)')
+            result = self._window.create_file_dialog(webview.OPEN_DIALOG, file_types=file_types)
+            if result and len(result) > 0:
+                return result[0] if isinstance(result, (list, tuple)) else result
+            return ""
+        except Exception as e:
+            import sys
+            print(f"Error in open_project_file_dialog: {e}", file=sys.stderr)
+            sys.stderr.flush()
+            return ""
+
+    def get_supported_languages(self):
+        """
+        Returns the full set of languages the app can use, so the user can enable
+        additional ones in the settings:
+          - recognition: all Whisper languages (offline, built into the model)
+          - translation: all Google Translator target languages (online service)
+        Each entry is {code, name}, sorted by name. No download required – these
+        are already available; the UI just exposes them on demand.
+        """
+        result = {"recognition": [], "translation": []}
+        try:
+            from whisper.tokenizer import LANGUAGES as whisper_langs
+            result["recognition"] = sorted(
+                [{"code": code, "name": name.title()} for code, name in whisper_langs.items()],
+                key=lambda x: x["name"]
+            )
+        except Exception as e:
+            print(f"Fehler beim Laden der Erkennungssprachen: {e}")
+        try:
+            from deep_translator.constants import GOOGLE_LANGUAGES_TO_CODES as google_langs
+            result["translation"] = sorted(
+                [{"code": code, "name": name.title()} for name, code in google_langs.items()],
+                key=lambda x: x["name"]
+            )
+        except Exception as e:
+            print(f"Fehler beim Laden der Übersetzungssprachen: {e}")
+        return result
+
     def cancel_transcription(self):
         """
         Requests cancellation of the currently running queue. Remaining files are

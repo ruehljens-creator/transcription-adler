@@ -120,9 +120,14 @@
                                 Dateien hier ablegen oder Schaltfläche unten verwenden.
                                 Dateien werden nicht kopiert, sondern bleiben am Originalort.
                             </p>
-                            <button id="browse-btn" type="button" class="btn btn-secondary">
-                                Dateien auswählen
-                            </button>
+                            <div class="drop-actions">
+                                <button id="browse-btn" type="button" class="btn btn-secondary">
+                                    Dateien auswählen
+                                </button>
+                                <button id="open-project-btn" type="button" class="btn btn-secondary" title="Gespeichertes Projekt (.adler) öffnen – stellt Player und synchronen Text wieder her">
+                                    Projekt öffnen
+                                </button>
+                            </div>
                         </div>
                     </section>
 
@@ -311,6 +316,33 @@
                         <option value="small">Small – langsamer, höhere Genauigkeit (460 MB)</option>
                     </select>
                 </div>
+            </fieldset>
+
+            <!-- Sprachen verwalten -->
+            <fieldset class="setting-group">
+                <legend>Sprachen verwalten</legend>
+                <p id="manage-langs-help" class="setting-help">
+                    Zusätzliche Sprachen aktivieren – sie erscheinen danach oben in den Auswahlfeldern.
+                    Erkennung läuft offline (Whisper), Übersetzung über den Online-Dienst.
+                </p>
+
+                <label for="manage-recognition-select" class="manage-lang-label">Erkennungssprache hinzufügen</label>
+                <div class="manage-lang-row">
+                    <div class="select-wrapper">
+                        <select id="manage-recognition-select" aria-describedby="manage-langs-help"></select>
+                    </div>
+                    <button id="add-recognition-lang" type="button" class="btn btn-secondary-small">Hinzufügen</button>
+                </div>
+                <div id="recognition-lang-chips" class="lang-chips" aria-live="polite"></div>
+
+                <label for="manage-translation-select" class="manage-lang-label">Übersetzungssprache hinzufügen</label>
+                <div class="manage-lang-row">
+                    <div class="select-wrapper">
+                        <select id="manage-translation-select" aria-label="Übersetzungssprache aus voller Liste"></select>
+                    </div>
+                    <button id="add-translation-lang" type="button" class="btn btn-secondary-small">Hinzufügen</button>
+                </div>
+                <div id="translation-lang-chips" class="lang-chips" aria-live="polite"></div>
             </fieldset>
 
             <!-- Speicherort -->
