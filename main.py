@@ -19,6 +19,7 @@ from metadata import get_metadata
 from transcribe import transcribe_file, TranscriptionCancelled
 from docx_generator import create_docx
 from edl_export import build_edl
+from fcpxml_export import build_fcpxml
 import socket
 import secrets
 from bottle import Bottle, request, response, static_file
@@ -288,14 +289,25 @@ class Api:
             fps = meta.get("fps") or 25.0
             start_offset = meta.get("start_offset") or 0.0
             title = meta.get("clip_name") or os.path.basename(file_path)
-            content = build_edl(title, cuts, fps=fps, start_offset=start_offset)
+
+            if fmt == "fcpxml":
+                content = build_fcpxml(
+                    title, file_path, cuts, fps=fps, start_offset=start_offset,
+                    total_duration=meta.get("duration_sec") or 0.0,
+                    width=meta.get("width"), height=meta.get("height")
+                )
+                ext = "fcpxml"
+                file_types = ('Final Cut FCPXML (*.fcpxml)', 'All files (*.*)')
+            else:
+                content = build_edl(title, cuts, fps=fps, start_offset=start_offset)
+                ext = "edl"
+                file_types = ('EDL (*.edl)', 'All files (*.*)')
 
             name_without_ext, _ = os.path.splitext(os.path.basename(file_path))
-            file_types = ('EDL (*.edl)', 'All files (*.*)')
             save_path = self._window.create_file_dialog(
                 webview.SAVE_DIALOG,
                 directory=os.path.dirname(file_path),
-                save_filename=f"{name_without_ext}.edl",
+                save_filename=f"{name_without_ext}.{ext}",
                 file_types=file_types
             )
             if not save_path:

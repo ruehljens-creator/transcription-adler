@@ -107,6 +107,8 @@ def get_metadata(file_path):
         # Used optionally so transcription timestamps can reflect the original
         # timecode instead of always starting at zero.
         fps = None
+        width = None
+        height = None
         for stream in data.get('streams', []):
             if stream.get('codec_type') == 'video':
                 rate = stream.get('avg_frame_rate') or stream.get('r_frame_rate') or ''
@@ -118,6 +120,11 @@ def get_metadata(file_path):
                             fps = float(num) / den_f
                     except Exception:
                         pass
+                try:
+                    width = int(stream.get('width')) if stream.get('width') else None
+                    height = int(stream.get('height')) if stream.get('height') else None
+                except Exception:
+                    pass
                 break
 
         timecode_str = tags.get('timecode')
@@ -172,7 +179,9 @@ def get_metadata(file_path):
             'maps_link': google_maps_link,
             'start_timecode': start_timecode,
             'start_offset': start_offset,
-            'fps': fps
+            'fps': fps,
+            'width': width,
+            'height': height
         }
     except Exception as e:
         print(f"Error extracting metadata from {file_path}: {e}")
@@ -190,7 +199,9 @@ def get_metadata(file_path):
                 'maps_link': None,
                 'start_timecode': None,
                 'start_offset': 0.0,
-                'fps': None
+                'fps': None,
+                'width': None,
+                'height': None
             }
         except Exception:
             return {
@@ -202,7 +213,9 @@ def get_metadata(file_path):
                 'maps_link': None,
                 'start_timecode': None,
                 'start_offset': 0.0,
-                'fps': None
+                'fps': None,
+                'width': None,
+                'height': None
             }
 
 if __name__ == '__main__':
