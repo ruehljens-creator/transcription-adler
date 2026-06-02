@@ -47,8 +47,16 @@ class Api:
     def __init__(self):
         self._window = None
         self._transcripts = {}
-        # Set by the UI to request cancellation of the running queue.
+        # Set by the UI to request cancellation of the whole running queue.
         self._cancel_event = threading.Event()
+
+        # Mutable processing queue shared with the UI (per-file control).
+        self._queue = []                       # pending file paths, in order
+        self._queue_lock = threading.Lock()
+        self._worker_running = False
+        self._current_file = None              # path currently being transcribed
+        self._cancel_current = threading.Event()  # cancels only the current file
+        self._proc_params = {}                 # transcription parameters for the run
 
         # UI settings, persisted to disk so they survive app restarts.
         self._settings_path = self._get_settings_path()
@@ -357,79 +365,139 @@ class Api:
         safe_file = file_path.replace("\\", "\\\\").replace("'", "\\'")
         self._window.evaluate_js(f"onFileProgress('{safe_file}', {percent}, '{safe_msg}')")
 
-    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
-        """
-        Starts processing the dropped files queue in a background thread to prevent UI lockup.
-        """
-        # Fresh run – clear any previous cancellation request.
-        self._cancel_event.clear()
-        threading.Thread(
-            target=self._process_queue,
-            args=(files, source_lang, target_lang, model_size, output_dir_type, custom_path, diarize, speaker_count, docx_trans_mode, timecode_modes),
-            daemon=True
-        ).start()
+    def remove_from_queue(self, file_path):
+        """Removes a still-pending file from the processing queue."""
+        with self._queue_lock:
+            self._queue = [p for p in self._queue if p != file_path]
         return True
 
-    def _process_queue(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
+    def cancel_file(self, file_path):
         """
-        Processes files in the background: transcribes, translates, and writes word documents.
+        Cancels a single file: if it is the one currently being transcribed it is
+        aborted after the current Whisper pass; if it is still pending it is removed
+        from the queue so it won't be started.
         """
-        for idx, file_path in enumerate(files):
-            # Cancellation requested: mark this and all remaining files as cancelled.
+        if self._current_file == file_path:
+            self._cancel_current.set()
+        else:
+            with self._queue_lock:
+                self._queue = [p for p in self._queue if p != file_path]
+        return True
+
+    def prioritize_file(self, file_path):
+        """Moves a pending file to the front of the queue so it is processed next."""
+        with self._queue_lock:
+            if file_path in self._queue:
+                self._queue.remove(file_path)
+                self._queue.insert(0, file_path)
+        return True
+
+    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
+        """
+        Queues the given files and starts (or continues) the background worker.
+        """
+        self._cancel_event.clear()
+        self._proc_params = {
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "model_size": model_size,
+            "output_dir_type": output_dir_type,
+            "custom_path": custom_path,
+            "diarize": diarize,
+            "speaker_count": speaker_count,
+            "docx_trans_mode": docx_trans_mode,
+            "timecode_modes": timecode_modes,
+        }
+        with self._queue_lock:
+            # Replace the pending queue; never re-queue the file currently running.
+            self._queue = [f for f in files if f != self._current_file]
+        self._ensure_worker()
+        return True
+
+    def _ensure_worker(self):
+        """Starts the background worker thread if it isn't already running."""
+        with self._queue_lock:
+            if self._worker_running:
+                return
+            self._worker_running = True
+        threading.Thread(target=self._worker_loop, daemon=True).start()
+
+    def _worker_loop(self):
+        """Consumes the shared queue until it is empty or globally cancelled."""
+        while True:
             if self._cancel_event.is_set():
-                for remaining in files[idx:]:
-                    if os.path.exists(remaining):
-                        self._emit_progress(remaining, -2, "Abgebrochen")
-                break
+                with self._queue_lock:
+                    remaining = self._queue[:]
+                    self._queue = []
+                    self._worker_running = False
+                for p in remaining:
+                    if os.path.exists(p):
+                        self._emit_progress(p, -2, "Abgebrochen")
+                return
 
-            if not os.path.exists(file_path):
-                continue
+            with self._queue_lock:
+                if not self._queue:
+                    # Mark not-running atomically with the empty check to avoid races.
+                    self._worker_running = False
+                    return
+                file_path = self._queue.pop(0)
+                self._current_file = file_path
 
-            file_name = os.path.basename(file_path)
+            self._cancel_current.clear()
+            self._process_one(file_path)
+            self._current_file = None
 
-            def report_progress(percent, msg):
-                self._emit_progress(file_path, percent, msg)
+    def _process_one(self, file_path):
+        """Transcribes a single file and writes the report(s)."""
+        if not os.path.exists(file_path):
+            self._emit_progress(file_path, -1, "Fehler: Datei nicht gefunden")
+            return
 
-            try:
-                # 1. Fetch metadata
-                report_progress(5, "Analysiere Datei-Metadaten...")
-                meta = get_metadata(file_path)
+        p = self._proc_params
+        file_name = os.path.basename(file_path)
 
-                # 2. Run Whisper Transcription
-                report_progress(10, "Lade Whisper-Modell...")
-                result = transcribe_file(
-                    file_path,
-                    source_lang=source_lang,
-                    target_lang=target_lang,
-                    model_name=model_size,
-                    progress_callback=report_progress,
-                    diarize=diarize,
-                    speaker_count=speaker_count,
-                    cancel_check=self._cancel_event.is_set
-                )
+        def report_progress(percent, msg):
+            self._emit_progress(file_path, percent, msg)
 
-                # Cache the segments for the frontend player
-                self._transcripts[file_path] = result["segments"]
+        # Cancel when either the whole queue or just this file is cancelled.
+        def should_cancel():
+            return self._cancel_event.is_set() or self._cancel_current.is_set()
 
-                # 3. Create one .docx per selected timecode mode in chosen output directory
-                report_progress(95, "Generiere Word-Bericht...")
+        try:
+            report_progress(5, "Analysiere Datei-Metadaten...")
+            meta = get_metadata(file_path)
 
-                created = self._generate_reports(
-                    file_path, meta, result["segments"], output_dir_type, custom_path,
-                    target_lang, docx_trans_mode, timecode_modes
-                )
+            report_progress(10, "Lade Whisper-Modell...")
+            result = transcribe_file(
+                file_path,
+                source_lang=p.get("source_lang"),
+                target_lang=p.get("target_lang"),
+                model_name=p.get("model_size", "base"),
+                progress_callback=report_progress,
+                diarize=p.get("diarize", False),
+                speaker_count=p.get("speaker_count", "2"),
+                cancel_check=should_cancel
+            )
 
-                if len(created) == 1:
-                    report_progress(100, f"Erstellt: {created[0]}")
-                else:
-                    report_progress(100, f"{len(created)} Berichte erstellt")
+            self._transcripts[file_path] = result["segments"]
 
-            except TranscriptionCancelled:
-                report_progress(-2, "Abgebrochen")
-                continue
-            except Exception as e:
-                print(f"Fehler bei Verarbeitung von {file_name}: {e}")
-                report_progress(-1, f"Fehler: {str(e)}")
+            report_progress(95, "Generiere Word-Bericht...")
+            created = self._generate_reports(
+                file_path, meta, result["segments"],
+                p.get("output_dir_type", "source"), p.get("custom_path", ""),
+                p.get("target_lang"), p.get("docx_trans_mode", "both"), p.get("timecode_modes")
+            )
+
+            if len(created) == 1:
+                report_progress(100, f"Erstellt: {created[0]}")
+            else:
+                report_progress(100, f"{len(created)} Berichte erstellt")
+
+        except TranscriptionCancelled:
+            report_progress(-2, "Abgebrochen")
+        except Exception as e:
+            print(f"Fehler bei Verarbeitung von {file_name}: {e}")
+            report_progress(-1, f"Fehler: {str(e)}")
 
     def save_project_file(self, video_path, segments_json, cuts_json):
         """

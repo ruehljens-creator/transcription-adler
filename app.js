@@ -524,7 +524,7 @@ function renderQueue() {
         const tr = document.createElement('tr');
         tr.id = 'empty-state';
         tr.innerHTML = `
-            <td colspan="5" class="empty-text">
+            <td colspan="6" class="empty-text">
                 Keine Dateien in der Warteschlange. Dateien zum oberen Bereich hinzufügen, um zu beginnen.
             </td>
         `;
@@ -592,8 +592,120 @@ function renderQueue() {
 
         // Status (eigene Zelle – kann gezielt einzeln aktualisiert werden)
         tr.appendChild(createStatusCell(file));
+        // Aktionen (Priorität / Abbrechen / Löschen)
+        tr.appendChild(createActionsCell(file));
         queueTbody.appendChild(tr);
     });
+}
+
+// ------------------------------------------------------------
+// Aktionszelle pro Datei: Priorität, Abbrechen, Löschen
+// ------------------------------------------------------------
+function createActionsCell(file) {
+    const td = document.createElement('td');
+    const wrap = document.createElement('div');
+    wrap.className = 'row-actions';
+
+    // Priorität – nur sinnvoll, solange die Datei noch wartet
+    if (file.status === 'queued') {
+        const prioBtn = document.createElement('button');
+        prioBtn.type = 'button';
+        prioBtn.className = 'row-action-btn prio';
+        prioBtn.innerHTML = '<span aria-hidden="true">⬆</span>';
+        prioBtn.title = 'Vorziehen – diese Datei als Nächstes bearbeiten';
+        prioBtn.setAttribute('aria-label', `${file.name} vorziehen`);
+        prioBtn.addEventListener('click', (e) => { e.stopPropagation(); prioritizeFile(file); });
+        wrap.appendChild(prioBtn);
+    }
+
+    // Abbrechen – während Verarbeitung oder solange wartend
+    if (file.status === 'processing' || file.status === 'queued') {
+        const cancelBtnRow = document.createElement('button');
+        cancelBtnRow.type = 'button';
+        cancelBtnRow.className = 'row-action-btn cancel';
+        cancelBtnRow.innerHTML = '<span aria-hidden="true">■</span>';
+        cancelBtnRow.title = 'Transkription dieser Datei abbrechen';
+        cancelBtnRow.setAttribute('aria-label', `Transkription von ${file.name} abbrechen`);
+        cancelBtnRow.addEventListener('click', (e) => { e.stopPropagation(); cancelFileTranscription(file); });
+        wrap.appendChild(cancelBtnRow);
+    }
+
+    // Löschen – immer möglich (entfernt die Zeile; bricht laufende Datei ab)
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'row-action-btn delete';
+    delBtn.innerHTML = '<span aria-hidden="true">🗑</span>';
+    delBtn.title = 'Aus der Warteschlange entfernen';
+    delBtn.setAttribute('aria-label', `${file.name} aus der Warteschlange entfernen`);
+    delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteFile(file); });
+    wrap.appendChild(delBtn);
+
+    td.appendChild(wrap);
+    return td;
+}
+
+// Datei vorziehen (als Nächstes bearbeiten)
+function prioritizeFile(file) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.prioritize_file) {
+        window.pywebview.api.prioritize_file(file.path);
+    }
+    const idx = fileQueue.indexOf(file);
+    if (idx === -1) return;
+    fileQueue.splice(idx, 1);
+    // Vor die übrigen wartenden Dateien einsortieren (hinter aktive/fertige).
+    let insertAt = 0;
+    while (insertAt < fileQueue.length && fileQueue[insertAt].status !== 'queued') insertAt++;
+    fileQueue.splice(insertAt, 0, file);
+    renderQueue();
+    announce(`${file.name} wird als Nächstes bearbeitet.`);
+}
+
+// Transkription einer einzelnen Datei abbrechen (Zeile bleibt erhalten)
+function cancelFileTranscription(file) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.cancel_file) {
+        window.pywebview.api.cancel_file(file.path);
+    }
+    if (file.status === 'processing') {
+        // Läuft gerade: Python bricht nach dem aktuellen Whisper-Durchlauf ab.
+        file.statusMsg = 'Wird abgebrochen…';
+        updateRowStatus(file);
+    } else if (file.status === 'queued') {
+        // Wartend: wird nicht mehr gestartet.
+        file.status = 'cancelled';
+        file.statusMsg = 'Abgebrochen';
+        renderQueue();
+    }
+    announce(`Abbruch für ${file.name} angefordert.`);
+    refreshProcessingState();
+}
+
+// Datei komplett aus der Warteschlange entfernen
+function deleteFile(file) {
+    if (window.pywebview && window.pywebview.api) {
+        // Laufende Datei zusätzlich abbrechen; pending einfach aus der Queue nehmen.
+        if (file.status === 'processing' && window.pywebview.api.cancel_file) {
+            window.pywebview.api.cancel_file(file.path);
+        }
+        if (window.pywebview.api.remove_from_queue) {
+            window.pywebview.api.remove_from_queue(file.path);
+        }
+    }
+    const idx = fileQueue.indexOf(file);
+    if (idx !== -1) fileQueue.splice(idx, 1);
+    renderQueue();
+    updateStartButtonState();
+    announce(`${file.name} entfernt.`);
+    refreshProcessingState();
+}
+
+// Verarbeitungs-/Button-Zustand neu bewerten (nach Löschen/Abbrechen einzelner Dateien)
+function refreshProcessingState() {
+    const stillRunning = fileQueue.some(f => f.status === 'processing' || f.status === 'queued');
+    if (!stillRunning && isProcessing) {
+        isProcessing = false;
+        if (cancelBtn) { cancelBtn.hidden = true; cancelBtn.disabled = false; }
+    }
+    updateStartButtonState();
 }
 
 // ------------------------------------------------------------
@@ -601,6 +713,7 @@ function renderQueue() {
 // ------------------------------------------------------------
 function createStatusCell(file) {
     const tdStatus = document.createElement('td');
+    tdStatus.className = 'queue-status-cell';
     const statusContainer = document.createElement('div');
     statusContainer.className = 'status-cell-container';
     tdStatus.appendChild(statusContainer);
@@ -672,7 +785,7 @@ function updateRowStatus(file) {
         renderQueue();
         return;
     }
-    const oldCell = targetRow.lastElementChild;
+    const oldCell = targetRow.querySelector('.queue-status-cell');
     const newCell = createStatusCell(file);
     if (oldCell) {
         targetRow.replaceChild(newCell, oldCell);
@@ -713,15 +826,18 @@ startBtn.addEventListener('click', () => {
 
     fileQueue.forEach(f => {
         if (f.status !== 'completed') {
-            f.status = 'processing';
+            // Als wartend markieren; Python setzt die jeweils aktive Datei auf
+            // 'processing'. So bleiben Priorität/Abbruch pro Datei aussagekräftig.
+            f.status = 'queued';
             f.progress = 0;
-            f.statusMsg = 'Wird initialisiert…';
+            f.statusMsg = 'Wartet';
         }
     });
     renderQueue();
     announce(`Transkription gestartet für ${fileQueue.length} Datei${fileQueue.length === 1 ? '' : 'en'}.`);
 
-    const paths = fileQueue.map(f => f.path);
+    // Nur noch nicht fertige Dateien an die Verarbeitung übergeben.
+    const paths = fileQueue.filter(f => f.status !== 'completed').map(f => f.path);
     if (window.pywebview && window.pywebview.api) {
         const outputDirType = document.getElementById('output-dir-type').value;
         const customPath = customOutputPath;
@@ -754,6 +870,7 @@ window.onFileProgress = function (filePath, percent, statusMsg) {
     const file = fileQueue.find(f => f.path === filePath);
     if (!file) return;
 
+    const prevStatus = file.status;
     const wasNotCompleted = file.status !== 'completed' && file.status !== 'failed';
 
     if (percent === 100) {
@@ -777,15 +894,16 @@ window.onFileProgress = function (filePath, percent, statusMsg) {
         file.statusMsg = statusMsg || 'Wird verarbeitet…';
     }
 
-    // Beim Fertigwerden wird die Zeile klickbar/abspielbar -> volles Rendern.
-    // Häufige Fortschritts-Ticks aktualisieren nur die betroffene Statuszelle.
-    if (percent === 100) {
+    // Bei Statuswechsel die ganze Zeile neu rendern (Aktionsbuttons ändern sich);
+    // reine Fortschritts-Ticks (gleicher Status) aktualisieren nur die Statuszelle.
+    if (file.status !== prevStatus) {
         renderQueue();
     } else {
         updateRowStatus(file);
     }
 
-    const stillRunning = fileQueue.some(f => f.status === 'processing');
+    // Noch laufend, solange irgendeine Datei verarbeitet wird ODER wartet.
+    const stillRunning = fileQueue.some(f => f.status === 'processing' || f.status === 'queued');
     if (!stillRunning) {
         isProcessing = false;
         updateStartButtonState();

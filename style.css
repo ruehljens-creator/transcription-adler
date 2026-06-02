@@ -759,6 +759,51 @@ body {
     text-overflow: ellipsis;
 }
 
+/* Aktions-Buttons pro Warteschlangen-Zeile */
+.row-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.row-action-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 1.15rem;
+    line-height: 1;
+    padding: 5px 9px;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.row-action-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: var(--border-color-active);
+    color: var(--text-primary);
+}
+
+.row-action-btn:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 1px;
+}
+
+.row-action-btn.delete:hover {
+    color: var(--danger);
+    border-color: rgba(248, 113, 113, 0.5);
+}
+
+.row-action-btn.cancel:hover {
+    color: var(--warning);
+    border-color: rgba(204, 167, 0, 0.5);
+}
+
+.row-action-btn.prio:hover {
+    color: var(--success);
+    border-color: rgba(137, 209, 133, 0.5);
+}
+
 /* Scrollbar */
 .queue-list-wrapper::-webkit-scrollbar,
 .sidebar::-webkit-scrollbar {
