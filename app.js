@@ -129,6 +129,7 @@ function saveSettings() {
             speakerCount: document.getElementById('speaker-count')?.value,
             docxTransMode: document.getElementById('docx-trans-mode')?.value,
             timecodeModes: getSelectedTimecodeModes(),
+            useOriginalTimecode: document.getElementById('use-original-timecode')?.checked,
             extraRecognitionLangs: extraRecognitionLangs,
             extraTranslationLangs: extraTranslationLangs
         };
@@ -249,6 +250,11 @@ function applySettings(settings) {
             document.querySelectorAll('.timecode-mode').forEach(cb => {
                 cb.checked = settings.timecodeModes.includes(cb.value);
             });
+        }
+
+        const tcChk = document.getElementById('use-original-timecode');
+        if (tcChk && settings.useOriginalTimecode !== undefined) {
+            tcChk.checked = settings.useOriginalTimecode;
         }
 
     } catch (e) {
@@ -630,6 +636,18 @@ function createActionsCell(file) {
         wrap.appendChild(cancelBtnRow);
     }
 
+    // Neu starten – für abgebrochene oder fehlgeschlagene Dateien
+    if (file.status === 'cancelled' || file.status === 'failed') {
+        const restartBtn = document.createElement('button');
+        restartBtn.type = 'button';
+        restartBtn.className = 'row-action-btn restart';
+        restartBtn.innerHTML = '<span aria-hidden="true">▶</span>';
+        restartBtn.title = 'Transkription dieser Datei erneut starten';
+        restartBtn.setAttribute('aria-label', `${file.name} erneut transkribieren`);
+        restartBtn.addEventListener('click', (e) => { e.stopPropagation(); restartFile(file); });
+        wrap.appendChild(restartBtn);
+    }
+
     // Löschen – immer möglich (entfernt die Zeile; bricht laufende Datei ab)
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
@@ -706,6 +724,44 @@ function refreshProcessingState() {
         if (cancelBtn) { cancelBtn.hidden = true; cancelBtn.disabled = false; }
     }
     updateStartButtonState();
+}
+
+// Aktuelle Transkriptions-Einstellungen aus der UI lesen
+function readTranscriptionSettings() {
+    return {
+        sourceLang: sourceLangSelect.value,
+        targetLang: translateEnableCheckbox.checked ? targetLangSelect.value : null,
+        modelSize: modelSizeSelect.value,
+        outputDirType: document.getElementById('output-dir-type').value,
+        customPath: customOutputPath,
+        diarize: document.getElementById('diarization-enable').checked,
+        speakerCount: document.getElementById('speaker-count').value,
+        docxTransMode: document.getElementById('docx-trans-mode').value,
+        timecodeModes: getSelectedTimecodeModes(),
+        useOriginalTimecode: document.getElementById('use-original-timecode')?.checked || false
+    };
+}
+
+// Einzelne (abgebrochene/fehlgeschlagene) Datei erneut transkribieren
+function restartFile(file) {
+    file.status = 'queued';
+    file.progress = 0;
+    file.statusMsg = 'Wartet';
+    isProcessing = true;
+    if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; }
+    clearBtn.hidden = true;
+    renderQueue();
+    updateStartButtonState();
+
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.requeue_file) {
+        const s = readTranscriptionSettings();
+        window.pywebview.api.requeue_file(
+            file.path, s.sourceLang, s.targetLang, s.modelSize, s.outputDirType,
+            s.customPath, s.diarize, s.speakerCount, s.docxTransMode, s.timecodeModes,
+            s.useOriginalTimecode
+        );
+    }
+    announce(`${file.name} wird erneut transkribiert.`);
 }
 
 // ------------------------------------------------------------
@@ -845,7 +901,8 @@ startBtn.addEventListener('click', () => {
         const speakerCount = document.getElementById('speaker-count').value;
         const docxTransMode = document.getElementById('docx-trans-mode').value;
         const timecodeModes = getSelectedTimecodeModes();
-        window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount, docxTransMode, timecodeModes);
+        const useOriginalTimecode = document.getElementById('use-original-timecode')?.checked || false;
+        window.pywebview.api.start_transcription(paths, sourceLang, targetLang, modelSize, outputDirType, customPath, diarize, speakerCount, docxTransMode, timecodeModes, useOriginalTimecode);
     }
 });
 
@@ -1158,11 +1215,7 @@ function renderCutList() {
         cutDiv.setAttribute('title', 'Klicken, um zum Startzeitpunkt zu springen');
         
         cutDiv.addEventListener('click', () => {
-            const player = document.getElementById('media-player');
-            if (player) {
-                player.currentTime = cut.start;
-                player.play().catch(e => console.log('Autoplay blocked:', e));
-            }
+            vlcSeek(cut.start);
         });
         
         const infoSpan = document.createElement('span');
@@ -1377,6 +1430,79 @@ function showCutMessage(msg, type) {
 let currentPlayingFile = null;
 let currentTranscriptLanguage = 'both'; // 'both', 'original', 'translated'
 
+// ------------------------------------------------------------
+// Native VLC-Wiedergabe (separates Fenster) + Transkript-Synchronisation
+// ------------------------------------------------------------
+let currentVlcTime = 0;       // zuletzt bekannte Wiedergabezeit (s)
+let currentVlcLength = 0;     // Gesamtlänge (s)
+let vlcPollTimer = null;
+let lastActiveSegIdx = -1;
+
+function vlcFormatTime(seconds) {
+    if (!seconds || seconds < 0 || !isFinite(seconds)) seconds = 0;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function vlcUpdateControls(state) {
+    const playBtn = document.getElementById('vlc-play-pause');
+    const seek = document.getElementById('vlc-seek');
+    const timeLabel = document.getElementById('vlc-time-label');
+    if (playBtn) playBtn.textContent = state.playing ? '⏸' : '▶';
+    if (timeLabel) timeLabel.textContent = `${vlcFormatTime(state.time)} / ${vlcFormatTime(state.length)}`;
+    if (seek && !seek.matches(':active')) {
+        seek.value = (state.length > 0) ? Math.round((state.time / state.length) * 1000) : 0;
+    }
+}
+
+function vlcUpdateActiveSegment(time) {
+    const segs = currentPlayingFile && currentPlayingFile.segments;
+    if (!segs) return;
+    const activeIdx = segs.findIndex(seg => time >= seg.start && time <= seg.end);
+    if (activeIdx === lastActiveSegIdx) return;
+    if (lastActiveSegIdx !== -1) {
+        const prev = document.getElementById(`segment-${lastActiveSegIdx}`);
+        if (prev) prev.classList.remove('active');
+    }
+    if (activeIdx !== -1) {
+        const el = document.getElementById(`segment-${activeIdx}`);
+        if (el) {
+            el.classList.add('active');
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+    lastActiveSegIdx = activeIdx;
+}
+
+function vlcStartPolling() {
+    vlcStopPolling();
+    vlcPollTimer = setInterval(() => {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.player_get_state) {
+            window.pywebview.api.player_get_state().then(st => {
+                if (!st || !st.active) return;
+                currentVlcTime = st.time;
+                currentVlcLength = st.length;
+                vlcUpdateControls(st);
+                vlcUpdateActiveSegment(st.time);
+            }).catch(() => {});
+        }
+    }, 250);
+}
+
+function vlcStopPolling() {
+    if (vlcPollTimer) { clearInterval(vlcPollTimer); vlcPollTimer = null; }
+}
+
+function vlcSeek(seconds) {
+    currentVlcTime = seconds;
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.player_set_time) {
+        window.pywebview.api.player_set_time(seconds);
+    }
+    vlcUpdateActiveSegment(seconds);
+}
+
 function openDetailPanel(file) {
     const panel = document.getElementById('detail-panel');
     if (!panel) return;
@@ -1389,22 +1515,12 @@ function openDetailPanel(file) {
     
     panel.classList.add('active');
     panel.setAttribute('aria-hidden', 'false');
-    
-    // Kino-Modus standardmäßig zurücksetzen
-    panel.classList.remove('theater-mode');
-    const btnTheater = document.getElementById('btn-toggle-theater');
-    if (btnTheater) {
-        btnTheater.classList.remove('active');
-        btnTheater.textContent = "📽 Kino-Modus";
-    }
-    
-    renderCutList();
 
-    // Linke Spalte schmaler machen
-    const leftCol = document.querySelector('.dashboard-left');
-    if (leftCol) {
-        leftCol.style.flex = '0 0 58%';
-    }
+    // Player-Vollmodus: Detailansicht nutzt die gesamte Programmfläche
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.classList.add('player-mode');
+
+    renderCutList();
 
     // Dateiname setzen
     const nameEl = document.getElementById('detail-filename');
@@ -1419,58 +1535,45 @@ function openDetailPanel(file) {
         listContainer.innerHTML = '<div class="empty-text">Lade Transkript...</div>';
     }
 
-        // Player initialisieren
-        const playerContainer = document.getElementById('media-player-container');
-        if (playerContainer) {
-            playerContainer.innerHTML = '';
+    // Native VLC-Wiedergabe im separaten Fenster starten
+    lastActiveSegIdx = -1;
+    currentVlcTime = 0;
+    currentVlcLength = 0;
+    const playPauseBtn = document.getElementById('vlc-play-pause');
+    if (playPauseBtn) playPauseBtn.textContent = '▶';
+    const seekEl = document.getElementById('vlc-seek');
+    if (seekEl) seekEl.value = 0;
+    const timeLabelEl = document.getElementById('vlc-time-label');
+    if (timeLabelEl) timeLabelEl.textContent = '00:00:00 / 00:00:00';
 
-            const ext = file.name.split('.').pop().toLowerCase();
-            const isVideo = ['mp4', 'mov', 'mkv', 'webm'].includes(ext);
-
-            const player = document.createElement(isVideo ? 'video' : 'audio');
-            player.id = 'media-player';
-            player.controls = true;
-            player.preload = 'metadata';
-            
-            // Set up local web server URL or fall back to file:///
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.get_server_config().then(config => {
-                    const encodedPath = encodeURIComponent(file.path);
-                    player.src = `http://127.0.0.1:${config.port}/media?token=${config.token}&path=${encodedPath}`;
-                }).catch(err => {
-                    console.error("Fehler beim Abrufen der Server-Konfiguration:", err);
-                    player.src = 'file:///' + encodeURI(file.path.replace(/\\/g, '/'));
-                });
-            } else {
-                player.src = 'file:///' + encodeURI(file.path.replace(/\\/g, '/'));
-            }
-            playerContainer.appendChild(player);
+    if (window.pywebview && window.pywebview.api) {
+        if (window.pywebview.api.player_open) {
+            window.pywebview.api.player_open(file.path).then(res => {
+                if (!res || !res.success) {
+                    showCutMessage(`Wiedergabe nicht möglich: ${res ? res.error : 'unbekannt'}`, "error");
+                }
+            }).catch(err => console.error('VLC player_open Fehler:', err));
+        }
+        vlcStartPolling();
 
         // Transkript abrufen aus Python Cache
-        if (window.pywebview && window.pywebview.api) {
-            window.pywebview.api.get_transcript(file.path).then(segments => {
-                if (!segments || segments.length === 0) {
-                    if (listContainer) {
-                        listContainer.innerHTML = '<div class="empty-text">Kein Transkript verfügbar.</div>';
-                    }
-                    return;
-                }
-
-                file.segments = segments;
-                renderTranscriptSegments(file);
-                setupPlayerSync(player, segments);
-            }).catch(err => {
-                console.error('Fehler beim Laden des Transkripts:', err);
+        window.pywebview.api.get_transcript(file.path).then(segments => {
+            if (!segments || segments.length === 0) {
                 if (listContainer) {
-                    listContainer.innerHTML = '<div class="empty-text">Fehler beim Laden des Transkripts.</div>';
+                    listContainer.innerHTML = '<div class="empty-text">Kein Transkript verfügbar.</div>';
                 }
-            });
-        } else {
-            // Fallback
-            if (listContainer) {
-                listContainer.innerHTML = '<div class="empty-text">Kein Transkript geladen (außerhalb der App).</div>';
+                return;
             }
-        }
+            file.segments = segments;
+            renderTranscriptSegments(file);
+        }).catch(err => {
+            console.error('Fehler beim Laden des Transkripts:', err);
+            if (listContainer) {
+                listContainer.innerHTML = '<div class="empty-text">Fehler beim Laden des Transkripts.</div>';
+            }
+        });
+    } else if (listContainer) {
+        listContainer.innerHTML = '<div class="empty-text">Kein Transkript geladen (außerhalb der App).</div>';
     }
 }
 
@@ -1478,28 +1581,19 @@ function closeDetailPanel() {
     const panel = document.getElementById('detail-panel');
     if (!panel) return;
 
-    // Layout zurücksetzen
-    const leftCol = document.querySelector('.dashboard-left');
-    if (leftCol) {
-        leftCol.style.flex = '1';
-    }
+    // Vollmodus verlassen, Warteschlange/Sidebar wieder einblenden
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.classList.remove('player-mode');
 
     panel.classList.remove('active');
-    panel.classList.remove('theater-mode');
-    
-    const btnTheater = document.getElementById('btn-toggle-theater');
-    if (btnTheater) {
-        btnTheater.classList.remove('active');
-        btnTheater.textContent = "📽 Kino-Modus";
-    }
     panel.setAttribute('aria-hidden', 'true');
 
-    // Player stoppen
-    const player = document.getElementById('media-player');
-    if (player) {
-        player.pause();
-        player.src = '';
+    // VLC-Wiedergabe stoppen und Synchronisation beenden
+    vlcStopPolling();
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.player_stop) {
+        window.pywebview.api.player_stop();
     }
+    lastActiveSegIdx = -1;
 
     currentPlayingFile = null;
 }
@@ -1604,13 +1698,9 @@ function renderTranscriptSegments(file) {
         
         segDiv.appendChild(textDiv);
 
-        // Klick sucht im Video/Audio
+        // Klick springt im VLC-Player zum Segmentstart
         const seekHandler = () => {
-            const player = document.getElementById('media-player');
-            if (player) {
-                player.currentTime = seg.start;
-                player.play().catch(e => console.log('Autoplay blocked:', e));
-            }
+            vlcSeek(seg.start);
         };
 
         segDiv.addEventListener('click', seekHandler);
@@ -1634,32 +1724,6 @@ function renderTranscriptSegments(file) {
     updateCutUIControls();
 }
 
-function setupPlayerSync(player, segments) {
-    let lastActiveIdx = -1;
-
-    player.addEventListener('timeupdate', () => {
-        const time = player.currentTime;
-        const activeIdx = segments.findIndex(seg => time >= seg.start && time <= seg.end);
-        
-        if (activeIdx !== lastActiveIdx) {
-            if (lastActiveIdx !== -1) {
-                const prevEl = document.getElementById(`segment-${lastActiveIdx}`);
-                if (prevEl) prevEl.classList.remove('active');
-            }
-            
-            if (activeIdx !== -1) {
-                const activeEl = document.getElementById(`segment-${activeIdx}`);
-                if (activeEl) {
-                    activeEl.classList.add('active');
-                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }
-            
-            lastActiveIdx = activeIdx;
-        }
-    });
-}
-
 // Binden von Event Listeners für Details Panel
 // Falls die Python-API erst nach dem DOM bereitsteht: dann (erneut) laden.
 window.addEventListener('pywebviewready', loadSettings);
@@ -1678,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addTransBtn) addTransBtn.addEventListener('click', () => addExtraLang('translation'));
 
     // Listeners for setting changes
-    const idsToSave = ['source-lang', 'target-lang', 'model-size', 'output-dir-type', 'diarization-enable', 'speaker-count', 'docx-trans-mode'];
+    const idsToSave = ['source-lang', 'target-lang', 'model-size', 'output-dir-type', 'diarization-enable', 'speaker-count', 'docx-trans-mode', 'use-original-timecode'];
     idsToSave.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -1707,18 +1771,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Kino-Modus Umschalten
-    const btnTheater = document.getElementById('btn-toggle-theater');
-    const detailPanel = document.getElementById('detail-panel');
-    if (btnTheater && detailPanel) {
-        btnTheater.addEventListener('click', () => {
-            const isActive = detailPanel.classList.toggle('theater-mode');
-            btnTheater.classList.toggle('active', isActive);
-            btnTheater.textContent = isActive ? "📽 Standard" : "📽 Kino-Modus";
-            announce(isActive ? "Kino-Modus aktiviert." : "Standard-Modus aktiviert.");
-        });
-    }
-
     const closeDetailBtn = document.getElementById('close-detail-btn');
     if (closeDetailBtn) {
         closeDetailBtn.addEventListener('click', closeDetailPanel);
@@ -1733,19 +1785,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnUpdate = document.getElementById('btn-update-docx');
     
     if (btnIn) {
-        btnIn.addEventListener('click', () => {
-            const player = document.getElementById('media-player');
-            if (player) {
-                setInPoint(player.currentTime);
+        btnIn.addEventListener('click', () => setInPoint(currentVlcTime));
+    }
+    if (btnOut) {
+        btnOut.addEventListener('click', () => setOutPoint(currentVlcTime));
+    }
+
+    // VLC-Transportsteuerung
+    const vlcPlayPause = document.getElementById('vlc-play-pause');
+    if (vlcPlayPause) {
+        vlcPlayPause.addEventListener('click', () => {
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.player_toggle_pause) {
+                window.pywebview.api.player_toggle_pause().then(playing => {
+                    vlcPlayPause.textContent = playing ? '⏸' : '▶';
+                });
             }
         });
     }
-    if (btnOut) {
-        btnOut.addEventListener('click', () => {
-            const player = document.getElementById('media-player');
-            if (player) {
-                setOutPoint(player.currentTime);
-            }
+    const vlcSeekEl = document.getElementById('vlc-seek');
+    if (vlcSeekEl) {
+        vlcSeekEl.addEventListener('change', () => {
+            const frac = Number(vlcSeekEl.value) / 1000;
+            if (currentVlcLength > 0) vlcSeek(frac * currentVlcLength);
+        });
+    }
+
+    // Schnittmarken auf-/zuklappen
+    const cutToggle = document.getElementById('cut-toggle');
+    const cutContainer = document.querySelector('.cut-controls-container');
+    if (cutToggle && cutContainer) {
+        cutToggle.addEventListener('click', () => {
+            const expanded = cutContainer.classList.toggle('expanded');
+            cutToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         });
     }
     if (btnAddCut) {

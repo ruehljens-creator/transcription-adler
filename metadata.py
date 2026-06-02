@@ -4,6 +4,25 @@ import re
 import os
 from datetime import datetime
 
+
+def _parse_timecode_to_seconds(tc, fps=None):
+    """
+    Parses a timecode string into seconds.
+    Accepts 'HH:MM:SS:FF', 'HH:MM:SS;FF' (drop-frame) or 'HH:MM:SS.mmm'.
+    Frames are converted using fps when available.
+    """
+    tc = str(tc).strip()
+    m = re.match(r'^(\d{1,3}):(\d{2}):(\d{2})(?:[:;](\d+)|\.(\d+))?$', tc)
+    if not m:
+        return None
+    hh, mm, ss = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    total = hh * 3600 + mm * 60 + ss
+    if m.group(4) is not None and fps:
+        total += int(m.group(4)) / fps
+    elif m.group(5) is not None:
+        total += float('0.' + m.group(5))
+    return float(total)
+
 def reverse_geocode(lat, lon):
     """
     Translates lat/lon coordinates into a real city/country address using geopy Nominatim.
@@ -84,6 +103,39 @@ def get_metadata(file_path):
             except Exception:
                 creation_str = "Unbekannt"
                 
+        # 3.5 Start timecode (e.g. broadcast files) -> offset in seconds.
+        # Used optionally so transcription timestamps can reflect the original
+        # timecode instead of always starting at zero.
+        fps = None
+        for stream in data.get('streams', []):
+            if stream.get('codec_type') == 'video':
+                rate = stream.get('avg_frame_rate') or stream.get('r_frame_rate') or ''
+                if '/' in rate:
+                    num, den = rate.split('/')
+                    try:
+                        den_f = float(den)
+                        if den_f:
+                            fps = float(num) / den_f
+                    except Exception:
+                        pass
+                break
+
+        timecode_str = tags.get('timecode')
+        if not timecode_str:
+            for stream in data.get('streams', []):
+                s_tags = stream.get('tags', {})
+                if s_tags.get('timecode'):
+                    timecode_str = s_tags['timecode']
+                    break
+
+        start_offset = 0.0
+        start_timecode = None
+        if timecode_str:
+            secs = _parse_timecode_to_seconds(timecode_str, fps)
+            if secs is not None:
+                start_offset = secs
+                start_timecode = timecode_str
+
         # 4. GPS Location
         # Standard key for location in QuickTime is com.apple.quicktime.location.ISO6709
         # or location, location-eng, etc.
@@ -117,7 +169,9 @@ def get_metadata(file_path):
             'duration_str': duration_str,
             'creation_date': creation_str,
             'gps': gps_coords,
-            'maps_link': google_maps_link
+            'maps_link': google_maps_link,
+            'start_timecode': start_timecode,
+            'start_offset': start_offset
         }
     except Exception as e:
         print(f"Error extracting metadata from {file_path}: {e}")
@@ -132,7 +186,9 @@ def get_metadata(file_path):
                 'duration_str': "00:00:00",
                 'creation_date': creation_str,
                 'gps': None,
-                'maps_link': None
+                'maps_link': None,
+                'start_timecode': None,
+                'start_offset': 0.0
             }
         except Exception:
             return {
@@ -141,7 +197,9 @@ def get_metadata(file_path):
                 'duration_str': "Unbekannt",
                 'creation_date': "Unbekannt",
                 'gps': None,
-                'maps_link': None
+                'maps_link': None,
+                'start_timecode': None,
+                'start_offset': 0.0
             }
 
 if __name__ == '__main__':

@@ -62,6 +62,16 @@ class Api:
         self._settings_path = self._get_settings_path()
         self._settings = self._read_settings_file()
 
+        # Native VLC player (plays MXF / pro codecs in its own window).
+        self._vlc_instance = None
+        self._vlc_player = None
+        self._current_media_path = None
+        # Owned, resizable native video window (VLC renders into it via set_hwnd).
+        self._video_hwnd = None
+        self._video_thread = None
+        self._video_wndproc = None
+        self._user32 = None
+
         # Start secure local HTTP server for media files
         self._server_token = secrets.token_hex(16)
         self._server_port = self._find_free_port()
@@ -350,6 +360,258 @@ class Api:
             print(f"Fehler beim Laden der Übersetzungssprachen: {e}")
         return result
 
+    # ------------------------------------------------------------
+    # Native VLC playback (MXF / professional codecs) in its own window
+    # ------------------------------------------------------------
+    def _ensure_vlc(self):
+        """Lazily creates the libVLC instance/player; locates the VLC runtime."""
+        if self._vlc_player is not None:
+            return self._vlc_player
+
+        candidates = []
+        if getattr(sys, 'frozen', False):
+            candidates.append(os.path.join(sys._MEIPASS, 'vlc'))
+        candidates += [
+            r"C:\Program Files\VideoLAN\VLC",
+            r"C:\Program Files (x86)\VideoLAN\VLC",
+        ]
+        vlc_dir = next(
+            (c for c in candidates if os.path.isdir(c) and os.path.exists(os.path.join(c, 'libvlc.dll'))),
+            None
+        )
+        if vlc_dir:
+            try:
+                os.add_dll_directory(vlc_dir)
+            except Exception:
+                pass
+            os.environ["PATH"] = vlc_dir + os.pathsep + os.environ.get("PATH", "")
+            os.environ.setdefault("VLC_PLUGIN_PATH", os.path.join(vlc_dir, "plugins"))
+
+        import vlc
+        self._vlc_instance = vlc.Instance("--quiet", "--no-video-title-show")
+        self._vlc_player = self._vlc_instance.media_player_new()
+        return self._vlc_player
+
+    def _ensure_video_window(self):
+        """
+        Creates a resizable native window (~1/4 of the screen) that VLC renders
+        into. Returns its HWND, or None on failure (then VLC uses its own window).
+        The window is created once and reused, so user resizing is preserved.
+        """
+        if self._video_hwnd:
+            return self._video_hwnd
+        if os.name != 'nt':
+            return None
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.WinDLL('user32', use_last_error=True)
+            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            gdi32 = ctypes.WinDLL('gdi32', use_last_error=True)
+
+            LRESULT = ctypes.c_longlong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_long
+            WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
+
+            class WNDCLASS(ctypes.Structure):
+                _fields_ = [
+                    ("style", wintypes.UINT),
+                    ("lpfnWndProc", WNDPROC),
+                    ("cbClsExtra", ctypes.c_int),
+                    ("cbWndExtra", ctypes.c_int),
+                    ("hInstance", wintypes.HINSTANCE),
+                    ("hIcon", wintypes.HICON),
+                    ("hCursor", wintypes.HANDLE),
+                    ("hbrBackground", wintypes.HBRUSH),
+                    ("lpszMenuName", wintypes.LPCWSTR),
+                    ("lpszClassName", wintypes.LPCWSTR),
+                ]
+
+            user32.DefWindowProcW.restype = LRESULT
+            user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+            user32.CreateWindowExW.restype = wintypes.HWND
+            user32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                                               ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                               wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID]
+            user32.RegisterClassW.restype = wintypes.ATOM
+            user32.RegisterClassW.argtypes = [ctypes.POINTER(WNDCLASS)]
+            user32.GetMessageW.restype = ctypes.c_int
+            user32.GetMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND, wintypes.UINT, wintypes.UINT]
+            user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
+            user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
+            user32.DispatchMessageW.restype = LRESULT
+            user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+            user32.GetSystemMetrics.restype = ctypes.c_int
+            user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+            user32.LoadCursorW.restype = wintypes.HANDLE
+            user32.LoadCursorW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
+            kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+            kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+            gdi32.GetStockObject.restype = wintypes.HANDLE
+            gdi32.GetStockObject.argtypes = [ctypes.c_int]
+
+            self._user32 = user32
+
+            WS_OVERLAPPEDWINDOW = 0x00CF0000
+            WS_VISIBLE = 0x10000000
+            WM_CLOSE = 0x0010
+
+            def py_wndproc(hwnd, msg, wparam, lparam):
+                if msg == WM_CLOSE:
+                    user32.ShowWindow(hwnd, 0)  # SW_HIDE statt zerstören
+                    try:
+                        if self._vlc_player is not None:
+                            self._vlc_player.stop()
+                    except Exception:
+                        pass
+                    return 0
+                return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+            self._video_wndproc = WNDPROC(py_wndproc)  # Referenz halten (GC!)
+
+            hinst = kernel32.GetModuleHandleW(None)
+            class_name = "TranscriptionAdlerVideoWindow"
+
+            wc = WNDCLASS()
+            wc.style = 0x0003  # CS_HREDRAW | CS_VREDRAW
+            wc.lpfnWndProc = self._video_wndproc
+            wc.hInstance = hinst
+            wc.hCursor = user32.LoadCursorW(None, ctypes.c_wchar_p(32512))  # IDC_ARROW
+            wc.hbrBackground = gdi32.GetStockObject(4)  # BLACK_BRUSH
+            wc.lpszClassName = class_name
+            user32.RegisterClassW(ctypes.byref(wc))
+
+            sw = user32.GetSystemMetrics(0)  # SM_CXSCREEN
+            sh = user32.GetSystemMetrics(1)  # SM_CYSCREEN
+            w = max(480, sw // 2)            # halbe Breite × halbe Höhe = 1/4 Fläche
+            h = max(320, sh // 2)
+            x = (sw - w) // 2
+            y = (sh - h) // 2
+
+            import threading
+            created = threading.Event()
+
+            def run():
+                try:
+                    hwnd = user32.CreateWindowExW(
+                        0, class_name, "Transcription Adler – Video",
+                        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                        x, y, w, h, None, None, hinst, None
+                    )
+                    self._video_hwnd = hwnd
+                    created.set()
+                    msg = wintypes.MSG()
+                    while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+                        user32.TranslateMessage(ctypes.byref(msg))
+                        user32.DispatchMessageW(ctypes.byref(msg))
+                except Exception as e:
+                    print("Video-Fenster-Thread Fehler:", e)
+                    created.set()
+
+            self._video_thread = threading.Thread(target=run, daemon=True)
+            self._video_thread.start()
+            created.wait(2.0)
+            return self._video_hwnd
+        except Exception as e:
+            print("Konnte Video-Fenster nicht erstellen:", e)
+            return None
+
+    def _show_video_window(self):
+        """Ensures the owned video window is visible (e.g. after it was hidden)."""
+        try:
+            if self._video_hwnd and self._user32:
+                self._user32.ShowWindow(self._video_hwnd, 5)  # SW_SHOW
+        except Exception:
+            pass
+
+    def player_open(self, file_path):
+        """Loads a file into the native VLC player and starts playback (own window)."""
+        try:
+            if not os.path.exists(file_path):
+                return {"success": False, "error": "Datei nicht gefunden"}
+            player = self._ensure_vlc()
+
+            # In unser eigenes, resizables Fenster rendern (sonst VLC-Auto-Fenster).
+            hwnd = self._ensure_video_window()
+            if hwnd:
+                try:
+                    player.set_hwnd(int(hwnd))
+                    self._show_video_window()
+                except Exception as e:
+                    print("set_hwnd fehlgeschlagen, nutze VLC-Auto-Fenster:", e)
+
+            self._current_media_path = file_path
+            media = self._vlc_instance.media_new(file_path)
+            player.set_media(media)
+            player.play()
+            return {"success": True}
+        except Exception as e:
+            print(f"VLC-Fehler beim Öffnen: {e}")
+            return {"success": False, "error": str(e)}
+
+    def _ensure_playable(self):
+        """
+        If playback has ended/stopped, reloads the media so play/seek work again
+        (libVLC won't resume from the 'Ended' state without re-setting the media).
+        Returns True if a reload was performed.
+        """
+        import vlc
+        p = self._vlc_player
+        if p is None:
+            return False
+        if p.get_state() in (vlc.State.Ended, vlc.State.Stopped, vlc.State.Error):
+            if self._current_media_path:
+                media = self._vlc_instance.media_new(self._current_media_path)
+                p.set_media(media)
+                p.play()
+                return True
+        return False
+
+    def player_toggle_pause(self):
+        """Toggles play/pause. Restarts from the beginning if playback had ended."""
+        try:
+            if self._ensure_playable():
+                return True  # reloaded -> now playing from start
+            self._vlc_player.pause()  # libVLC pause() toggles
+            return bool(self._vlc_player.is_playing())
+        except Exception:
+            return False
+
+    def player_set_time(self, seconds):
+        """Seeks to an absolute position (seconds); reloads first if ended/stopped."""
+        try:
+            self._ensure_playable()
+            self._vlc_player.set_time(int(float(seconds) * 1000))
+            return True
+        except Exception:
+            return False
+
+    def player_get_state(self):
+        """Returns current time, total length (seconds) and playing flag for the UI."""
+        try:
+            p = self._vlc_player
+            if p is None:
+                return {"time": 0.0, "length": 0.0, "playing": False, "active": False}
+            return {
+                "time": max(p.get_time(), 0) / 1000.0,
+                "length": max(p.get_length(), 0) / 1000.0,
+                "playing": bool(p.is_playing()),
+                "active": True
+            }
+        except Exception:
+            return {"time": 0.0, "length": 0.0, "playing": False, "active": False}
+
+    def player_stop(self):
+        """Stops playback and hides the owned video window."""
+        try:
+            if self._vlc_player is not None:
+                self._vlc_player.stop()
+            if self._video_hwnd and self._user32:
+                self._user32.ShowWindow(self._video_hwnd, 0)  # SW_HIDE
+            return True
+        except Exception:
+            return False
+
     def cancel_transcription(self):
         """
         Requests cancellation of the currently running queue. Remaining files are
@@ -392,7 +654,31 @@ class Api:
                 self._queue.insert(0, file_path)
         return True
 
-    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None):
+    def requeue_file(self, file_path, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None, use_original_timecode=False):
+        """
+        Re-queues a single file (e.g. after it was cancelled or failed) using the
+        current settings, and starts the worker if it isn't running.
+        """
+        self._cancel_event.clear()
+        self._proc_params = {
+            "source_lang": source_lang,
+            "target_lang": target_lang,
+            "model_size": model_size,
+            "output_dir_type": output_dir_type,
+            "custom_path": custom_path,
+            "diarize": diarize,
+            "speaker_count": speaker_count,
+            "docx_trans_mode": docx_trans_mode,
+            "timecode_modes": timecode_modes,
+            "use_original_timecode": use_original_timecode,
+        }
+        with self._queue_lock:
+            if file_path != self._current_file and file_path not in self._queue:
+                self._queue.append(file_path)
+        self._ensure_worker()
+        return True
+
+    def start_transcription(self, files, source_lang, target_lang, model_size, output_dir_type="source", custom_path="", diarize=False, speaker_count="2", docx_trans_mode="both", timecode_modes=None, use_original_timecode=False):
         """
         Queues the given files and starts (or continues) the background worker.
         """
@@ -407,6 +693,7 @@ class Api:
             "speaker_count": speaker_count,
             "docx_trans_mode": docx_trans_mode,
             "timecode_modes": timecode_modes,
+            "use_original_timecode": use_original_timecode,
         }
         with self._queue_lock:
             # Replace the pending queue; never re-queue the file currently running.
@@ -467,6 +754,9 @@ class Api:
             report_progress(5, "Analysiere Datei-Metadaten...")
             meta = get_metadata(file_path)
 
+            # Optional: Zeitstempel am Original-Timecode der Datei ausrichten.
+            timecode_offset = meta.get("start_offset", 0.0) if p.get("use_original_timecode") else 0.0
+
             report_progress(10, "Lade Whisper-Modell...")
             result = transcribe_file(
                 file_path,
@@ -476,7 +766,8 @@ class Api:
                 progress_callback=report_progress,
                 diarize=p.get("diarize", False),
                 speaker_count=p.get("speaker_count", "2"),
-                cancel_check=should_cancel
+                cancel_check=should_cancel,
+                timecode_offset=timecode_offset
             )
 
             self._transcripts[file_path] = result["segments"]

@@ -174,9 +174,7 @@
                 <!-- Rechte Spalte: Player & Transkript Detailansicht -->
                 <div class="dashboard-right" id="detail-panel" aria-hidden="true">
                     <div class="detail-header">
-                        <h3 id="detail-filename">Dateiname</h3>
                         <div class="detail-header-actions">
-                            <button id="btn-toggle-theater" type="button" class="btn-theater-toggle" title="Kino-Modus umschalten">📽 Kino-Modus</button>
                             <button id="close-detail-btn" type="button" class="btn-close-drawer" aria-label="Detailansicht schließen">&times;</button>
                         </div>
                     </div>
@@ -184,10 +182,18 @@
                         <!-- Linke Spalte in Details (Player & Schnittliste) -->
                         <div class="detail-player-col">
                             <div id="media-player-container">
-                                <!-- Audio/Video element will be injected here -->
+                                <div class="player-bar">
+                                    <button id="vlc-play-pause" type="button" class="player-play-btn" aria-label="Wiedergabe oder Pause">▶</button>
+                                    <input type="range" id="vlc-seek" class="player-seek" min="0" max="1000" value="0" step="1" aria-label="Suchleiste">
+                                    <span id="vlc-time-label" class="player-time">00:00:00 / 00:00:00</span>
+                                </div>
+                                <p class="player-hint"><span aria-hidden="true">🎬</span> Das Video läuft im separaten VLC-Fenster.</p>
                             </div>
                             <div class="cut-controls-container" aria-label="Schnittmarken Steuerung">
-                                <div class="cut-header">Schnittmarken (In / Out)</div>
+                                <button id="cut-toggle" type="button" class="cut-header" aria-expanded="false" aria-controls="cut-body">
+                                    <span class="cut-toggle-arrow" aria-hidden="true">▸</span> Schnittmarken (In / Out)
+                                </button>
+                                <div class="cut-body" id="cut-body">
                                 <div class="cut-times">
                                     <div class="cut-time-item">
                                         <span class="cut-label">IN-Punkt (◀):</span>
@@ -216,6 +222,7 @@
                                     <button id="btn-update-docx" class="btn btn-primary-small" type="button" title="Word-Bericht mit allen Schnittmarken aktualisieren">Bericht aktualisieren</button>
                                 </div>
                                 <div id="cut-status-msg" class="cut-status-msg" role="status" aria-live="polite"></div>
+                                </div><!-- /cut-body -->
                             </div>
                         </div>
 
@@ -407,6 +414,20 @@
                 </div>
             </div>
             
+            <!-- Original-Timecode -->
+            <div class="setting-group checkbox-group">
+                <label class="vscode-checkbox-label">
+                    <input type="checkbox" id="use-original-timecode" aria-describedby="use-original-timecode-help">
+                    <span class="checkbox-custom"></span>
+                    <span class="label-text">Original-Timecode der Datei verwenden</span>
+                </label>
+                <p id="use-original-timecode-help" class="setting-help">
+                    Wenn aktiviert, beginnen die Zeitstempel beim eingebetteten Start-Timecode der
+                    Datei (z. B. 10:00:00) statt bei 00:00:00. Betrifft Anzeige und Word-Bericht;
+                    Abspielen/Springen bleibt davon unberührt.
+                </p>
+            </div>
+
             <!-- Zeitstempel-Darstellung im Bericht (Mehrfachauswahl) -->
             <fieldset class="setting-group">
                 <legend>Zeitstempel im Word-Bericht</legend>

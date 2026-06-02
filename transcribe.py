@@ -142,7 +142,7 @@ def format_timestamp(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="base", progress_callback=None, diarize=False, speaker_count="2", cancel_check=None):
+def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="base", progress_callback=None, diarize=False, speaker_count="2", cancel_check=None, timecode_offset=0.0):
     """
     Transcribes the audio/video file.
     If target_lang is specified, it will translate the transcription.
@@ -296,11 +296,13 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
 
         translated_text = translations.get(i, "")
 
+        # Numeric start/end stay 0-based (used for player seeking/sync/cuts);
+        # only the displayed strings get the optional timecode offset applied.
         processed_segments.append({
             "start": start,
             "end": end,
-            "start_str": format_timestamp(start),
-            "end_str": format_timestamp(end),
+            "start_str": format_timestamp(start + timecode_offset),
+            "end_str": format_timestamp(end + timecode_offset),
             "original": original_text,
             "translated": translated_text,
             "speaker": speaker
