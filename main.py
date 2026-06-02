@@ -18,6 +18,7 @@ from webview.dom import DOMEventHandler
 from metadata import get_metadata
 from transcribe import transcribe_file, TranscriptionCancelled
 from docx_generator import create_docx
+from edl_export import build_edl
 import socket
 import secrets
 from bottle import Bottle, request, response, static_file
@@ -267,6 +268,50 @@ class Api:
             print(f"Fehler bei Aktualisierung des Berichts: {e}")
             return {"success": False, "error": str(e)}
 
+    def export_cuts(self, file_path, cuts_json, fmt="edl"):
+        """
+        Exports the cut list as an edit decision list. Currently CMX3600 EDL
+        (read by Premiere / Avid / Resolve). Source timecodes reflect the file's
+        start timecode + cut position; uses the file's frame rate.
+        """
+        try:
+            if not os.path.exists(file_path):
+                return {"success": False, "error": "Datei nicht gefunden"}
+            import json
+            cuts = json.loads(cuts_json)
+            if not cuts:
+                return {"success": False, "error": "Keine Schnitte vorhanden"}
+
+            meta = get_metadata(file_path)
+            fps = meta.get("fps") or 25.0
+            start_offset = meta.get("start_offset") or 0.0
+            title = meta.get("clip_name") or os.path.basename(file_path)
+            content = build_edl(title, cuts, fps=fps, start_offset=start_offset)
+
+            name_without_ext, _ = os.path.splitext(os.path.basename(file_path))
+            file_types = ('EDL (*.edl)', 'All files (*.*)')
+            save_path = self._window.create_file_dialog(
+                webview.SAVE_DIALOG,
+                directory=os.path.dirname(file_path),
+                save_filename=f"{name_without_ext}.edl",
+                file_types=file_types
+            )
+            if not save_path:
+                return {"success": False, "error": "Dialog abgebrochen"}
+            if isinstance(save_path, (list, tuple)):
+                save_path = save_path[0] if save_path else None
+                if not save_path:
+                    return {"success": False, "error": "Dialog abgebrochen"}
+
+            with open(save_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return {"success": True, "filename": os.path.basename(save_path)}
+        except Exception as e:
+            import traceback
+            print("Fehler beim EDL-Export:")
+            traceback.print_exc()
+            return {"success": False, "error": str(e)}
+
     def get_file_metadata(self, file_path):
         """
         Fetches metadata (duration, creation date, GPS info) for a single file.
@@ -385,7 +430,10 @@ class Api:
             except Exception:
                 pass
             os.environ["PATH"] = vlc_dir + os.pathsep + os.environ.get("PATH", "")
-            os.environ.setdefault("VLC_PLUGIN_PATH", os.path.join(vlc_dir, "plugins"))
+            # Diese explizit setzen, damit python-vlc die *gebündelte* libVLC nimmt
+            # (und nicht eine evtl. system-installierte).
+            os.environ["PYTHON_VLC_LIB_PATH"] = os.path.join(vlc_dir, "libvlc.dll")
+            os.environ["VLC_PLUGIN_PATH"] = os.path.join(vlc_dir, "plugins")
 
         import vlc
         self._vlc_instance = vlc.Instance("--quiet", "--no-video-title-show")

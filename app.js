@@ -1783,7 +1783,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnClear = document.getElementById('btn-clear-cut');
     const btnSaveProject = document.getElementById('btn-save-project');
     const btnUpdate = document.getElementById('btn-update-docx');
-    
+
+    const btnExportEdl = document.getElementById('btn-export-edl');
+    if (btnExportEdl) {
+        btnExportEdl.addEventListener('click', () => {
+            if (!currentPlayingFile) return;
+            const cuts = currentPlayingFile.cuts || [];
+            if (cuts.length === 0) {
+                showCutMessage("Die Schnittliste ist leer. Bitte zuerst Schnitte hinzufügen.", "error");
+                return;
+            }
+            showCutMessage("EDL wird exportiert...", "");
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.export_cuts) {
+                const cutsData = cuts.map(c => [c.start, c.end]);
+                window.pywebview.api.export_cuts(currentPlayingFile.path, JSON.stringify(cutsData), 'edl').then(result => {
+                    if (result && result.success) {
+                        showCutMessage(`EDL exportiert: ${result.filename}`, "success");
+                        announce(`EDL erfolgreich exportiert unter ${result.filename}`);
+                    } else {
+                        showCutMessage(`Fehler beim EDL-Export: ${result.error || 'Abgebrochen'}`, "error");
+                    }
+                }).catch(err => {
+                    console.error("Fehler bei export_cuts:", err);
+                    showCutMessage("Fehler beim Aufruf der Python-API.", "error");
+                });
+            }
+        });
+    }
+
     if (btnIn) {
         btnIn.addEventListener('click', () => setInPoint(currentVlcTime));
     }

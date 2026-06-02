@@ -52,6 +52,32 @@ for binary_file in ('ffmpeg.exe', 'ffprobe.exe'):
         print(f'[spec] WARNUNG: {binary_file} nicht gefunden.')
 
 # ----------------------------------------------------------------
+# VLC-Laufzeit bündeln (libvlc + Plugins), damit native Wiedergabe
+# (MXF / Profi-Codecs) ohne lokal installiertes VLC funktioniert.
+# Landet im Bundle unter vlc/ und vlc/plugins/ (siehe _ensure_vlc()).
+# ----------------------------------------------------------------
+_vlc_candidates = [
+    r'C:\Program Files\VideoLAN\VLC',
+    r'C:\Program Files (x86)\VideoLAN\VLC',
+]
+_vlc_dir = next((d for d in _vlc_candidates if os.path.exists(os.path.join(d, 'libvlc.dll'))), None)
+if _vlc_dir:
+    for dll in ('libvlc.dll', 'libvlccore.dll'):
+        dll_path = os.path.join(_vlc_dir, dll)
+        if os.path.exists(dll_path):
+            binaries.append((dll_path, 'vlc'))
+    _plugins_dir = os.path.join(_vlc_dir, 'plugins')
+    if os.path.isdir(_plugins_dir):
+        for _root, _dirs, _files in os.walk(_plugins_dir):
+            for _f in _files:
+                _full = os.path.join(_root, _f)
+                _rel = os.path.relpath(_full, _vlc_dir)          # z.B. plugins\access\lib...dll
+                binaries.append((_full, os.path.join('vlc', os.path.dirname(_rel))))
+    print(f'[spec] VLC-Laufzeit eingebunden aus: {_vlc_dir}')
+else:
+    print('[spec] WARNUNG: VLC nicht gefunden – Wiedergabe braucht dann lokal installiertes VLC.')
+
+# ----------------------------------------------------------------
 # Hidden Imports (Module, die PyInstaller sonst nicht erkennt)
 # ----------------------------------------------------------------
 hiddenimports = [
@@ -79,6 +105,7 @@ hiddenimports = [
     'geopy.geocoders.nominatim',
     'PIL',
     'PIL.Image',
+    'vlc',
 ]
 
 # ----------------------------------------------------------------

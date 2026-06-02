@@ -171,7 +171,8 @@ def get_metadata(file_path):
             'gps': gps_coords,
             'maps_link': google_maps_link,
             'start_timecode': start_timecode,
-            'start_offset': start_offset
+            'start_offset': start_offset,
+            'fps': fps
         }
     except Exception as e:
         print(f"Error extracting metadata from {file_path}: {e}")
@@ -188,7 +189,8 @@ def get_metadata(file_path):
                 'gps': None,
                 'maps_link': None,
                 'start_timecode': None,
-                'start_offset': 0.0
+                'start_offset': 0.0,
+                'fps': None
             }
         except Exception:
             return {
@@ -199,7 +201,8 @@ def get_metadata(file_path):
                 'gps': None,
                 'maps_link': None,
                 'start_timecode': None,
-                'start_offset': 0.0
+                'start_offset': 0.0,
+                'fps': None
             }
 
 if __name__ == '__main__':
