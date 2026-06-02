@@ -130,6 +130,7 @@ function saveSettings() {
             docxTransMode: document.getElementById('docx-trans-mode')?.value,
             timecodeModes: getSelectedTimecodeModes(),
             useOriginalTimecode: document.getElementById('use-original-timecode')?.checked,
+            videoEmbedded: videoEmbedded,
             extraRecognitionLangs: extraRecognitionLangs,
             extraTranslationLangs: extraTranslationLangs
         };
@@ -255,6 +256,12 @@ function applySettings(settings) {
         const tcChk = document.getElementById('use-original-timecode');
         if (tcChk && settings.useOriginalTimecode !== undefined) {
             tcChk.checked = settings.useOriginalTimecode;
+        }
+
+        if (settings.videoEmbedded !== undefined) {
+            videoEmbedded = !!settings.videoEmbedded;
+            const btn = document.getElementById('video-mode-toggle');
+            if (btn) btn.textContent = videoEmbedded ? '⧉ Eigenes Fenster' : '⧉ Eingebettet';
         }
 
     } catch (e) {
@@ -1437,6 +1444,45 @@ let currentVlcTime = 0;       // zuletzt bekannte Wiedergabezeit (s)
 let currentVlcLength = 0;     // Gesamtlänge (s)
 let vlcPollTimer = null;
 let lastActiveSegIdx = -1;
+let videoEmbedded = false;    // true = Video eingebettet, false = eigenes Fenster
+
+// Liefert die Bildschirm-Pixel-Geometrie der reservierten Video-Region
+function getEmbedRect() {
+    const region = document.getElementById('embed-video-region');
+    if (!region) return null;
+    const r = region.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    return {
+        x: Math.round(r.left * dpr),
+        y: Math.round(r.top * dpr),
+        w: Math.round(r.width * dpr),
+        h: Math.round(r.height * dpr)
+    };
+}
+
+// Setzt den Video-Modus (eingebettet/abgekoppelt) und positioniert das Bild
+function applyVideoMode() {
+    const app = document.querySelector('.app-container');
+    if (app) app.classList.toggle('video-embedded', videoEmbedded);
+    const btn = document.getElementById('video-mode-toggle');
+    if (btn) btn.textContent = videoEmbedded ? '⧉ Eigenes Fenster' : '⧉ Eingebettet';
+    if (!(window.pywebview && window.pywebview.api && window.pywebview.api.player_set_embedded)) return;
+    if (videoEmbedded) {
+        const rect = getEmbedRect() || { x: 0, y: 0, w: 0, h: 0 };
+        window.pywebview.api.player_set_embedded(true, rect.x, rect.y, rect.w, rect.h);
+    } else {
+        window.pywebview.api.player_set_embedded(false, 0, 0, 0, 0);
+    }
+}
+
+// Hält das eingebettete Video an der Region ausgerichtet (bei Resize/Layout)
+function updateEmbedRect() {
+    if (!videoEmbedded) return;
+    const rect = getEmbedRect();
+    if (rect && window.pywebview && window.pywebview.api && window.pywebview.api.player_update_embed_rect) {
+        window.pywebview.api.player_update_embed_rect(rect.x, rect.y, rect.w, rect.h);
+    }
+}
 
 function vlcFormatTime(seconds) {
     if (!seconds || seconds < 0 || !isFinite(seconds)) seconds = 0;
@@ -1486,6 +1532,7 @@ function vlcStartPolling() {
                 currentVlcLength = st.length;
                 vlcUpdateControls(st);
                 vlcUpdateActiveSegment(st.time);
+                if (videoEmbedded) updateEmbedRect();
             }).catch(() => {});
         }
     }, 250);
@@ -1551,6 +1598,8 @@ function openDetailPanel(file) {
             window.pywebview.api.player_open(file.path).then(res => {
                 if (!res || !res.success) {
                     showCutMessage(`Wiedergabe nicht möglich: ${res ? res.error : 'unbekannt'}`, "error");
+                } else {
+                    applyVideoMode();
                 }
             }).catch(err => console.error('VLC player_open Fehler:', err));
         }
@@ -1846,6 +1895,20 @@ document.addEventListener('DOMContentLoaded', () => {
             cutToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
         });
     }
+
+    // Video eingebettet / abgekoppelt umschalten
+    const videoModeToggle = document.getElementById('video-mode-toggle');
+    if (videoModeToggle) {
+        videoModeToggle.addEventListener('click', () => {
+            videoEmbedded = !videoEmbedded;
+            applyVideoMode();
+            saveSettings();
+            announce(videoEmbedded ? 'Video eingebettet.' : 'Video im eigenen Fenster.');
+        });
+    }
+
+    // Eingebettetes Video bei Fenstergrößenänderung neu ausrichten
+    window.addEventListener('resize', updateEmbedRect);
     if (btnAddCut) {
         btnAddCut.addEventListener('click', addCut);
     }

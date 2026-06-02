@@ -72,6 +72,8 @@ class Api:
         self._video_thread = None
         self._video_wndproc = None
         self._user32 = None
+        self._embedded = False     # True = video als Kind-Fenster in der App
+        self._main_hwnd = None     # Handle des Hauptfensters (für Embedding)
 
         # Start secure local HTTP server for media files
         self._server_token = secrets.token_hex(16)
@@ -498,6 +500,16 @@ class Api:
             gdi32.GetStockObject.restype = wintypes.HANDLE
             gdi32.GetStockObject.argtypes = [ctypes.c_int]
 
+            # Für Embedding/Reparenting
+            user32.SetParent.restype = wintypes.HWND
+            user32.SetParent.argtypes = [wintypes.HWND, wintypes.HWND]
+            user32.SetWindowLongW.restype = ctypes.c_long
+            user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_long]
+            user32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.BOOL]
+            user32.FindWindowW.restype = wintypes.HWND
+            user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+            user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+
             self._user32 = user32
 
             WS_OVERLAPPEDWINDOW = 0x00CF0000
@@ -571,6 +583,59 @@ class Api:
                 self._user32.ShowWindow(self._video_hwnd, 5)  # SW_SHOW
         except Exception:
             pass
+
+    def _set_video_mode(self, embedded, x=0, y=0, w=0, h=0):
+        """
+        Switches the (same) VLC video window between embedded (child of the main
+        window, positioned over a reserved region) and detached (own resizable
+        top-level window). VLC keeps rendering into the same HWND – no reload.
+        """
+        try:
+            if not self._video_hwnd or not self._user32:
+                return
+            u = self._user32
+            GWL_STYLE = -16
+            WS_CHILD = 0x40000000
+            WS_VISIBLE = 0x10000000
+            WS_OVERLAPPEDWINDOW = 0x00CF0000
+            SWP_FRAMECHANGED = 0x0020
+
+            if embedded:
+                if not self._main_hwnd:
+                    self._main_hwnd = u.FindWindowW(None, "Transcription Adler")
+                if not self._main_hwnd:
+                    return  # Hauptfenster nicht gefunden -> abgekoppelt lassen
+                u.SetWindowLongW(self._video_hwnd, GWL_STYLE, WS_CHILD | WS_VISIBLE)
+                u.SetParent(self._video_hwnd, self._main_hwnd)
+                u.SetWindowPos(self._video_hwnd, 0, int(x), int(y), max(1, int(w)), max(1, int(h)), SWP_FRAMECHANGED)
+                u.ShowWindow(self._video_hwnd, 5)
+            else:
+                u.SetParent(self._video_hwnd, None)
+                u.SetWindowLongW(self._video_hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE)
+                sw = u.GetSystemMetrics(0)
+                sh = u.GetSystemMetrics(1)
+                ww = max(480, sw // 2)
+                wh = max(320, sh // 2)
+                u.SetWindowPos(self._video_hwnd, 0, (sw - ww) // 2, (sh - wh) // 2, ww, wh, SWP_FRAMECHANGED)
+                u.ShowWindow(self._video_hwnd, 5)
+        except Exception as e:
+            print("Video-Modus setzen fehlgeschlagen:", e)
+
+    def player_set_embedded(self, embedded, x=0, y=0, w=0, h=0):
+        """Sets embedded/detached mode and positions the video accordingly."""
+        self._embedded = bool(embedded)
+        self._ensure_video_window()
+        self._set_video_mode(self._embedded, x, y, w, h)
+        return True
+
+    def player_update_embed_rect(self, x, y, w, h):
+        """While embedded, keeps the video aligned to the reserved HTML region."""
+        try:
+            if self._embedded and self._video_hwnd and self._user32:
+                self._user32.MoveWindow(self._video_hwnd, int(x), int(y), max(1, int(w)), max(1, int(h)), True)
+            return True
+        except Exception:
+            return False
 
     def player_open(self, file_path):
         """Loads a file into the native VLC player and starts playback (own window)."""

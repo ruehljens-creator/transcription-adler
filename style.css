@@ -861,6 +861,73 @@ body {
     margin-top: 8px;
 }
 
+.player-mode-btn {
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 5px 10px;
+    white-space: nowrap;
+}
+
+.player-mode-btn:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
+.player-mode-btn:focus-visible { outline: var(--focus-ring); outline-offset: 1px; }
+
+/* Reservierte Fläche für eingebettetes Video (nur im Embed-Modus sichtbar) */
+.embed-video-region {
+    display: none;
+    width: 100%;
+    height: 40vh;
+    min-height: 200px;
+    background: #000;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+/* ---- Eingebettet: zweispaltig – links Video (oben) + Steuerung (unten),
+       rechts der Text (halbe Fläche) ---- */
+.app-container.video-embedded .detail-body {
+    flex-direction: row;
+    gap: 16px;
+    overflow: hidden;
+    height: 100%;
+}
+
+.app-container.video-embedded .detail-player-col {
+    flex: 0 0 50%;
+    max-width: 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.app-container.video-embedded .detail-transcript-col {
+    flex: 1 1 50%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-container.video-embedded .embed-video-region {
+    display: block;
+    flex: 0 0 50%;     /* obere Hälfte der linken Spalte ≈ ein Viertel der Fläche */
+    height: auto;
+    min-height: 100px;
+}
+
+/* Im Embed-Modus ist der Hinweis aufs separate Fenster überflüssig */
+.app-container.video-embedded #player-hint {
+    display: none;
+}
+
 /* Scrollbar */
 .queue-list-wrapper::-webkit-scrollbar,
 .sidebar::-webkit-scrollbar {

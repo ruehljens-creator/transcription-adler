@@ -181,13 +181,16 @@
                     <div class="detail-body">
                         <!-- Linke Spalte in Details (Player & Schnittliste) -->
                         <div class="detail-player-col">
+                            <!-- Reservierte Fläche für eingebettetes Video (VLC legt sein Bild darüber) -->
+                            <div id="embed-video-region" class="embed-video-region" aria-hidden="true"></div>
                             <div id="media-player-container">
                                 <div class="player-bar">
                                     <button id="vlc-play-pause" type="button" class="player-play-btn" aria-label="Wiedergabe oder Pause">▶</button>
                                     <input type="range" id="vlc-seek" class="player-seek" min="0" max="1000" value="0" step="1" aria-label="Suchleiste">
                                     <span id="vlc-time-label" class="player-time">00:00:00 / 00:00:00</span>
+                                    <button id="video-mode-toggle" type="button" class="player-mode-btn" title="Video eingebettet oder im eigenen Fenster anzeigen">⧉ Eingebettet</button>
                                 </div>
-                                <p class="player-hint"><span aria-hidden="true">🎬</span> Das Video läuft im separaten VLC-Fenster.</p>
+                                <p class="player-hint" id="player-hint"><span aria-hidden="true">🎬</span> Das Video läuft im separaten VLC-Fenster.</p>
                             </div>
                             <div class="cut-controls-container" aria-label="Schnittmarken Steuerung">
                                 <button id="cut-toggle" type="button" class="cut-header" aria-expanded="false" aria-controls="cut-body">
