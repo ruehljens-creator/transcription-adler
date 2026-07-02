@@ -1,7 +1,13 @@
 pywebview>=6.0
+bottle>=0.12.25
 openai-whisper>=20231117
 deep-translator>=1.11.4
 python-docx>=1.1.0
 geopy>=2.4.1
 Pillow>=10.0.0
 python-vlc>=3.0.0
+# Sprecher-Diarisierung (echte d-Vektor-Embeddings). librosa bringt scipy/
+# soundfile/numba mit. Resemblyzer + webrtcvad-wheels werden im build_windows.bat
+# separat installiert (resemblyzer --no-deps + vorgebautes webrtcvad-Wheel,
+# damit kein C-Compiler nötig ist).
+librosa>=0.10

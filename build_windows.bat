@@ -25,6 +25,18 @@ if errorlevel 1 (
 echo [OK] Python gefunden:
 python --version
 
+REM ---------- Python-Version pruefen (PyTorch/Whisper brauchen 3.10 oder 3.11) ----------
+python -c "import sys; sys.exit(0 if sys.version_info[:2] in ((3,10),(3,11)) else 1)"
+if errorlevel 1 (
+    echo.
+    echo [FEHLER] Nicht unterstuetzte Python-Version.
+    echo PyTorch und Whisper bieten nur fuer Python 3.10 oder 3.11 fertige Pakete an.
+    echo Bitte Python 3.11 von https://www.python.org/downloads/ installieren
+    echo und den Build ueber "py -3.11 -m ..." bzw. mit 3.11 im PATH erneut starten.
+    pause
+    exit /b 1
+)
+
 REM ---------- Optional: virtuelle Umgebung ----------
 if not exist ".venv\" (
     echo.
@@ -48,6 +60,18 @@ python -m pip install -r requirements.txt
 python -m pip install pyinstaller pillow
 if errorlevel 1 (
     echo [FEHLER] Installation der Abhaengigkeiten fehlgeschlagen.
+    pause
+    exit /b 1
+)
+
+REM ---------- Sprecher-Diarisierung (Resemblyzer) ----------
+REM Vorgebautes webrtcvad-Wheel + Resemblyzer ohne dessen quellbasierte
+REM webrtcvad-Abhaengigkeit installieren -> es wird kein C-Compiler benoetigt.
+echo Installiere Sprecher-Erkennung (Resemblyzer)...
+python -m pip install webrtcvad-wheels
+python -m pip install --no-deps resemblyzer
+if errorlevel 1 (
+    echo [FEHLER] Installation von Resemblyzer fehlgeschlagen.
     pause
     exit /b 1
 )

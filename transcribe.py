@@ -51,35 +51,39 @@ def get_whisper_model(model_name="base"):
                 _model_cache[model_name] = whisper.load_model(model_name, device="cpu")
     return _model_cache[model_name]
 
-def extract_speaker_features(audio_segment, sample_rate=16000):
-    if len(audio_segment) < 200:
-        return np.zeros(20)
-    
-    frame_length = int(0.025 * sample_rate)
-    hop_length = int(0.010 * sample_rate)
-    
-    frames = []
-    for i in range(0, len(audio_segment) - frame_length, hop_length):
-        frames.append(audio_segment[i:i+frame_length])
-        
-    if not frames:
-        return np.zeros(20)
-        
-    frames = np.array(frames)
-    window = np.hamming(frame_length)
-    windowed_frames = frames * window
-    
-    fft_size = 512
-    spectrogram = np.abs(np.fft.rfft(windowed_frames, n=fft_size, axis=1))
-    
-    num_bands = 20
-    band_size = spectrogram.shape[1] // num_bands
-    features = []
-    for i in range(num_bands):
-        band_energy = np.mean(spectrogram[:, i*band_size:(i+1)*band_size], axis=1)
-        features.append(np.log(np.mean(band_energy) + 1e-6))
-        
-    return np.array(features)
+# Cache the Resemblyzer voice encoder (pretrained d-vector model) so it is
+# loaded only once per process.
+_voice_encoder = None
+
+def get_voice_encoder():
+    """
+    Lazily loads and caches the Resemblyzer VoiceEncoder. It produces a
+    256-dim, L2-normalised speaker embedding (d-vector) per utterance and runs
+    fully offline on CPU (or CUDA if available). The pretrained weights ship
+    inside the resemblyzer package – no runtime download.
+    """
+    global _voice_encoder
+    if _voice_encoder is None:
+        import torch
+        from resemblyzer import VoiceEncoder
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _voice_encoder = VoiceEncoder(device=device, verbose=False)
+    return _voice_encoder
+
+def _assign_missing_speakers(raw_segments, speaker_labels, valid_indices):
+    """
+    Segments too short for a stable embedding get no label from clustering.
+    Assign each of them the speaker of the temporally nearest embedded segment
+    so the transcript has no gaps.
+    """
+    if not valid_indices:
+        return
+    valid_sorted = sorted(valid_indices)
+    for idx in range(len(raw_segments)):
+        if idx in speaker_labels:
+            continue
+        nearest = min(valid_sorted, key=lambda v: abs(v - idx))
+        speaker_labels[idx] = speaker_labels.get(nearest, "Sprecher A")
 
 def kmeans(data, k, max_iters=100):
     np.random.seed(42)
@@ -200,49 +204,59 @@ def transcribe_file(file_path, source_lang=None, target_lang=None, model_name="b
         if progress_callback:
             progress_callback(72, "Führe Sprechererkennung (Diarisierung) aus...")
         try:
-            audio = whisper.load_audio(file_path)
-            features = []
+            audio = whisper.load_audio(file_path)   # 16 kHz mono float32
+            encoder = get_voice_encoder()
+
+            # Einen echten Sprecher-Embedding-Vektor (d-vector) pro Segment
+            # berechnen. Zu kurze Segmente liefern kein stabiles Embedding und
+            # werden anschließend dem nächstgelegenen Sprecher zugeordnet.
+            embeddings = []
             valid_indices = []
-            
+            min_samples = int(0.4 * 16000)   # < 0.4 s: zu kurz zum Einbetten
             for idx, seg in enumerate(raw_segments):
-                start_sample = int(seg["start"] * 16000)
+                start_sample = max(0, int(seg["start"] * 16000))
                 end_sample = int(seg["end"] * 16000)
                 seg_audio = audio[start_sample:end_sample]
-                feat = extract_speaker_features(seg_audio)
-                if feat is not None:
-                    features.append(feat)
-                    valid_indices.append(idx)
-            
-            if len(features) > 1:
-                features = np.array(features)
-                # Normalize features
-                mean = features.mean(axis=0)
-                std = features.std(axis=0) + 1e-6
-                features = (features - mean) / std
-                
-                # Determine number of speakers
+                if len(seg_audio) < min_samples:
+                    continue
+                try:
+                    emb = encoder.embed_utterance(seg_audio)
+                except Exception:
+                    continue
+                embeddings.append(emb)
+                valid_indices.append(idx)
+
+            if len(embeddings) > 1:
+                embeddings = np.array(embeddings)
+
+                # Sprecheranzahl bestimmen. Die d-Vektoren sind bereits
+                # L2-normiert, daher direkt (ohne erneute Skalierung) clustern.
                 if speaker_count == "auto":
-                    best_k = 2
-                    best_score = -1
-                    max_k = min(len(features), 4)
+                    best_k = 1
+                    best_score = -1.0
+                    max_k = min(len(embeddings), 6)
                     for k_cand in range(2, max_k + 1):
-                        labels, _ = kmeans(features, k_cand)
-                        score = silhouette_score(features, labels)
+                        labels, _ = kmeans(embeddings, k_cand)
+                        score = silhouette_score(embeddings, labels)
                         if score > best_score:
                             best_score = score
                             best_k = k_cand
-                    num_speakers = best_k
+                    # Nur mehrere Sprecher annehmen, wenn die Trennung überzeugt.
+                    num_speakers = best_k if best_score >= 0.10 else 1
                 else:
-                    num_speakers = min(int(speaker_count), len(features))
-                
+                    num_speakers = min(int(speaker_count), len(embeddings))
+
                 if num_speakers > 1:
-                    labels, _ = kmeans(features, num_speakers)
+                    labels, _ = kmeans(embeddings, num_speakers)
+                    speaker_names = ["Sprecher A", "Sprecher B", "Sprecher C",
+                                     "Sprecher D", "Sprecher E", "Sprecher F"]
                     speaker_labels = {}
-                    speaker_names = ["Sprecher A", "Sprecher B", "Sprecher C", "Sprecher D"]
                     for val_idx, label in zip(valid_indices, labels):
                         speaker_labels[val_idx] = speaker_names[label % len(speaker_names)]
+                    # Kurze, nicht eingebettete Segmente nachtragen.
+                    _assign_missing_speakers(raw_segments, speaker_labels, valid_indices)
                 else:
-                    speaker_labels = {idx: "Sprecher A" for idx in valid_indices}
+                    speaker_labels = {idx: "Sprecher A" for idx in range(len(raw_segments))}
             else:
                 speaker_labels = {idx: "Sprecher A" for idx in range(len(raw_segments))}
         except Exception as e:

@@ -33,6 +33,9 @@ TranscriptionAdler_Setup.exe
 TranscriptionAdler_Setup.zip
 *.zip
 
+# Lokales Code-Signing-Zertifikat (nur öffentlicher Schlüssel, maschinenlokal)
+*.cer
+
 # IDE-Dateien
 .vscode/
 .idea/

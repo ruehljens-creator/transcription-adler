@@ -20,9 +20,6 @@ from transcribe import transcribe_file, TranscriptionCancelled
 from docx_generator import create_docx
 from edl_export import build_edl
 from fcpxml_export import build_fcpxml
-import socket
-import secrets
-from bottle import Bottle, request, response, static_file
 
 def set_dock_icon():
     """
@@ -76,11 +73,6 @@ class Api:
         self._embedded = False     # True = video als Kind-Fenster in der App
         self._main_hwnd = None     # Handle des Hauptfensters (für Embedding)
 
-        # Start secure local HTTP server for media files
-        self._server_token = secrets.token_hex(16)
-        self._server_port = self._find_free_port()
-        self._start_media_server()
-
     @staticmethod
     def _get_settings_path():
         """Returns the path to the persisted settings file (in the user profile)."""
@@ -122,51 +114,6 @@ class Api:
         Returns the persisted UI settings (or {} if none have been saved yet).
         """
         return self._settings
-
-    def _find_free_port(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(('127.0.0.1', 0))
-        port = s.getsockname()[1]
-        s.close()
-        return port
-
-    def _start_media_server(self):
-        app = Bottle()
-
-        @app.route('/media')
-        def serve_media():
-            token = request.query.get('token')
-            if token != self._server_token:
-                response.status = 403
-                return "Forbidden"
-            
-            file_path = request.query.get('path')
-            if not file_path:
-                response.status = 400
-                return "Missing path"
-            
-            file_path = os.path.abspath(file_path)
-            if not os.path.exists(file_path):
-                response.status = 404
-                return "File not found"
-            
-            dirname = os.path.dirname(file_path)
-            filename = os.path.basename(file_path)
-            return static_file(filename, root=dirname)
-
-        def run():
-            app.run(host='127.0.0.1', port=self._server_port, quiet=True)
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def get_server_config(self):
-        """
-        Returns the port and security token of the local HTTP server.
-        """
-        return {
-            "port": self._server_port,
-            "token": self._server_token
-        }
 
     # Suffix appended to the report filename per timecode mode (only used when
     # more than one mode is selected, so a single mode keeps the clean name).

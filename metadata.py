@@ -72,7 +72,12 @@ def get_metadata(file_path):
         clip_name = os.path.basename(file_path)
         
         # 2. Duration
-        duration_sec = float(format_info.get('duration', 0.0))
+        # ffprobe liefert für manche Container/Streams "N/A" oder gar nichts –
+        # dann nicht die ganze Metadaten-Erfassung (Datum/GPS) abbrechen lassen.
+        try:
+            duration_sec = float(format_info.get('duration'))
+        except (TypeError, ValueError):
+            duration_sec = 0.0
         hours = int(duration_sec // 3600)
         minutes = int((duration_sec % 3600) // 60)
         seconds = int(duration_sec % 60)

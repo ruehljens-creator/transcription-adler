@@ -1,7 +1,7 @@
 ; Inno Setup Script for Transcription Adler
 [Setup]
 AppName=Transcription Adler
-AppVersion=1.0
+AppVersion=1.1
 AppPublisher=Jens ruehljens-creator
 DefaultDirName={autopf}\Transcription Adler
 DefaultGroupName=Transcription Adler

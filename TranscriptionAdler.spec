@@ -7,6 +7,7 @@ Erzeugt einen portablen Ordner unter dist/TranscriptionAdler/.
 import os
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 ROOT = Path(os.path.abspath(SPECPATH))
@@ -39,6 +40,15 @@ try:
         datas.append((str(whisper_assets_dir), 'whisper/assets'))
 except ImportError:
     print('[spec] WARNUNG: whisper-Paket nicht importierbar.')
+
+# Resemblyzer: vortrainierte d-Vektor-Gewichte (pretrained.pt) + librosa-Daten
+# einbinden, damit die Sprecher-Diarisierung offline im Bundle funktioniert.
+try:
+    datas += collect_data_files('resemblyzer')
+    datas += collect_data_files('librosa')
+    print('[spec] Resemblyzer/librosa-Daten eingebunden.')
+except Exception as _e:
+    print(f'[spec] WARNUNG: Resemblyzer/librosa-Daten nicht einbindbar: {_e}')
 
 # ----------------------------------------------------------------
 # Native Binaries (FFmpeg/FFprobe für Windows)
@@ -106,7 +116,20 @@ hiddenimports = [
     'PIL',
     'PIL.Image',
     'vlc',
+    # Sprecher-Diarisierung
+    'resemblyzer',
+    'librosa',
+    'soundfile',
+    'audioread',
+    'webrtcvad',
+    'scipy',
+    'scipy.signal',
+    'scipy.ndimage',
 ]
+
+# librosa/resemblyzer laden Teile per lazy_loader – Submodule explizit einsammeln.
+hiddenimports += collect_submodules('librosa')
+hiddenimports += collect_submodules('resemblyzer')
 
 # ----------------------------------------------------------------
 # Analyse
@@ -117,7 +140,7 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=[str(ROOT / 'hooks')],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
@@ -125,7 +148,6 @@ a = Analysis(
         'tkinter',
         'matplotlib',
         'pandas',
-        'scipy',
         'IPython',
         'jupyter',
         'notebook',
