@@ -2,6 +2,8 @@
 
 Offline-Transkription und -Übersetzung von Audio- und Videodateien mit OpenAI Whisper. Läuft vollständig lokal – keine Daten verlassen den Rechner.
 
+> 📖 **[Bedienungsanleitung (mit Screenshots)](BEDIENUNGSANLEITUNG.md)** – Schritt-für-Schritt-Erklärung aller Funktionen und Einstellungen.
+
 ## Funktionen
 
 - Transkription in mehreren Sprachen (Whisper: tiny / base / small)
