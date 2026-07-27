@@ -75,8 +75,14 @@ class Api:
 
     @staticmethod
     def _get_settings_path():
-        """Returns the path to the persisted settings file (in the user profile)."""
-        base = os.environ.get('APPDATA') or os.path.expanduser('~')
+        """
+        Returns the path to the persisted settings file (in the user profile).
+        Windows: %APPDATA%, macOS: ~/Library/Application Support, sonst ~.
+        """
+        if sys.platform == 'darwin':
+            base = os.path.expanduser('~/Library/Application Support')
+        else:
+            base = os.environ.get('APPDATA') or os.path.expanduser('~')
         folder = os.path.join(base, 'TranscriptionAdler')
         try:
             os.makedirs(folder, exist_ok=True)
@@ -374,27 +380,58 @@ class Api:
         if self._vlc_player is not None:
             return self._vlc_player
 
-        candidates = []
-        if getattr(sys, 'frozen', False):
-            candidates.append(os.path.join(sys._MEIPASS, 'vlc'))
-        candidates += [
-            r"C:\Program Files\VideoLAN\VLC",
-            r"C:\Program Files (x86)\VideoLAN\VLC",
-        ]
+        # Bibliotheks-/Plugin-Namen je Plattform. Auf macOS liegt libVLC in
+        # VLC.app; im gefrorenen Bundle jeweils unter vlc/ neben der App.
+        if sys.platform == 'darwin':
+            lib_name = 'libvlc.dylib'
+            candidates = []
+            if getattr(sys, 'frozen', False):
+                # Im Bundle liegen libvlc/libvlccore direkt in Contents/Frameworks
+                # (= sys._MEIPASS); die Plugins finden libvlccore von vlc/plugins
+                # aus über ihren RPATH "@loader_path/../..".
+                candidates.append(sys._MEIPASS)
+            candidates += [
+                '/Applications/VLC.app/Contents/MacOS/lib',
+                os.path.expanduser('~/Applications/VLC.app/Contents/MacOS/lib'),
+            ]
+        else:
+            lib_name = 'libvlc.dll'
+            candidates = []
+            if getattr(sys, 'frozen', False):
+                candidates.append(os.path.join(sys._MEIPASS, 'vlc'))
+            candidates += [
+                r"C:\Program Files\VideoLAN\VLC",
+                r"C:\Program Files (x86)\VideoLAN\VLC",
+            ]
+
         vlc_dir = next(
-            (c for c in candidates if os.path.isdir(c) and os.path.exists(os.path.join(c, 'libvlc.dll'))),
+            (c for c in candidates if os.path.isdir(c) and os.path.exists(os.path.join(c, lib_name))),
             None
         )
         if vlc_dir:
             try:
-                os.add_dll_directory(vlc_dir)
+                os.add_dll_directory(vlc_dir)   # nur Windows
             except Exception:
                 pass
             os.environ["PATH"] = vlc_dir + os.pathsep + os.environ.get("PATH", "")
             # Diese explizit setzen, damit python-vlc die *gebündelte* libVLC nimmt
             # (und nicht eine evtl. system-installierte).
-            os.environ["PYTHON_VLC_LIB_PATH"] = os.path.join(vlc_dir, "libvlc.dll")
-            os.environ["VLC_PLUGIN_PATH"] = os.path.join(vlc_dir, "plugins")
+            os.environ["PYTHON_VLC_LIB_PATH"] = os.path.join(vlc_dir, lib_name)
+            # Plugin-Verzeichnis: im macOS-Bundle unter vlc/plugins, bei einer
+            # installierten VLC.app neben lib/ (…/Contents/MacOS/plugins),
+            # unter Windows direkt im VLC-Ordner.
+            if sys.platform == 'darwin':
+                for cand_dir in (os.path.join(vlc_dir, 'vlc', 'plugins'),
+                                 os.path.join(os.path.dirname(vlc_dir), 'plugins'),
+                                 os.path.join(vlc_dir, 'plugins')):
+                    if os.path.isdir(cand_dir):
+                        plugin_dir = cand_dir
+                        break
+                else:
+                    plugin_dir = os.path.join(vlc_dir, 'plugins')
+            else:
+                plugin_dir = os.path.join(vlc_dir, 'plugins')
+            os.environ["VLC_PLUGIN_PATH"] = plugin_dir
 
         import vlc
         self._vlc_instance = vlc.Instance("--quiet", "--no-video-title-show")

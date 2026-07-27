@@ -41,6 +41,11 @@ TranscriptionAdler_Setup.zip
 .idea/
 .claude/
 
-# WICHTIG: TranscriptionAdler.spec wird eingecheckt, andere .spec ignoriert
+# WICHTIG: Die gepflegten Build-Specs werden eingecheckt, andere .spec ignoriert
 *.spec
 !TranscriptionAdler.spec
+!TranscriptionAdler-macOS.spec
+
+# macOS-Build-Artefakte
+TranscriptionAdler.dmg
+eagle_icon.icns
