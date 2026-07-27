@@ -1445,6 +1445,7 @@ let currentVlcLength = 0;     // Gesamtlänge (s)
 let vlcPollTimer = null;
 let lastActiveSegIdx = -1;
 let videoEmbedded = false;    // true = Video eingebettet, false = eigenes Fenster
+let embeddingSupported = true; // nur Windows kann das Videobild einbetten
 
 // Liefert die Bildschirm-Pixel-Geometrie der reservierten Video-Region
 function getEmbedRect() {
@@ -1460,8 +1461,27 @@ function getEmbedRect() {
     };
 }
 
+// Blendet den Einbetten-Umschalter aus, wenn die Plattform das nicht kann
+// (nur Windows; auf macOS spielt VLC in einem eigenen Fenster).
+function applyEmbeddingSupport() {
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || !api.player_supports_embedding) return;
+    api.player_supports_embedding().then(supported => {
+        embeddingSupported = !!supported;
+        if (embeddingSupported) return;
+        videoEmbedded = false;
+        const btn = document.getElementById('video-mode-toggle');
+        if (btn) btn.hidden = true;
+        const app = document.querySelector('.app-container');
+        if (app) app.classList.remove('video-embedded');
+    }).catch(() => {});
+}
+
 // Setzt den Video-Modus (eingebettet/abgekoppelt) und positioniert das Bild
 function applyVideoMode() {
+    // Ohne Plattform-Unterstützung nie einbetten – sonst würde das Layout Platz
+    // für ein Videobild reservieren, das dort nie erscheint.
+    if (!embeddingSupported) videoEmbedded = false;
     const app = document.querySelector('.app-container');
     if (app) app.classList.toggle('video-embedded', videoEmbedded);
     const btn = document.getElementById('video-mode-toggle');
@@ -1777,6 +1797,7 @@ function renderTranscriptSegments(file) {
 // Falls die Python-API erst nach dem DOM bereitsteht: dann (erneut) laden.
 window.addEventListener('pywebviewready', loadSettings);
 window.addEventListener('pywebviewready', loadSupportedLanguages);
+window.addEventListener('pywebviewready', applyEmbeddingSupport);
 
 document.addEventListener('DOMContentLoaded', () => {
     // Einstellungen laden (greift auf localStorage, falls API noch nicht bereit;

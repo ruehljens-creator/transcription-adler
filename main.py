@@ -617,6 +617,16 @@ class Api:
         except Exception as e:
             print("Video-Modus setzen fehlgeschlagen:", e)
 
+    @staticmethod
+    def player_supports_embedding():
+        """
+        Meldet, ob das Videobild in das App-Fenster eingebettet werden kann.
+        Das eigene Videofenster wird über die Win32-API erzeugt (_ensure_video_window),
+        daher ist Embedding nur unter Windows möglich; sonst spielt VLC in einem
+        eigenen Fenster. Das Frontend blendet den Umschalter entsprechend aus.
+        """
+        return os.name == 'nt'
+
     def player_set_embedded(self, embedded, x=0, y=0, w=0, h=0):
         """Sets embedded/detached mode and positions the video accordingly."""
         self._embedded = bool(embedded)
