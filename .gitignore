@@ -49,3 +49,11 @@ TranscriptionAdler_Setup.zip
 # macOS-Build-Artefakte
 TranscriptionAdler.dmg
 eagle_icon.icns
+
+# WICHTIG: Dieses Repo ist OEFFENTLICH.
+# Das Arbeitsgedaechtnis (ki brain) liegt im privaten Repo
+# ruehljens-creator/transcription-adler-brain, weil es Zugaenge und IPs
+# enthaelt. Hier zur Sicherheit blockieren, falls doch mal eins angelegt wird.
+ki brain/
+ki-brain/
+*.cer
