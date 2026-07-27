@@ -1,15 +1,22 @@
 # Transcription Adler
 
-Offline-Transkription und -Übersetzung von Audio- und Videodateien mit OpenAI Whisper. Läuft vollständig lokal – keine Daten verlassen den Rechner.
+**Offline-Transkription und -Übersetzung von Audio- und Videodateien mit OpenAI Whisper.** Läuft vollständig lokal – keine Daten verlassen den Rechner.
+
+*🇬🇧 [English version](README.en.md)*
 
 > 📖 **[Bedienungsanleitung (mit Screenshots)](BEDIENUNGSANLEITUNG.md)** – Schritt-für-Schritt-Erklärung aller Funktionen und Einstellungen.
 
 ## Funktionen
 
-- Transkription in mehreren Sprachen (Whisper: tiny / base / small)
-- Optionale Übersetzung in eine Zielsprache
+- **Transkription in über 90 Sprachen** – vollständig offline (Whisper: tiny / base / small)
+- **Sprecher-Erkennung (Diarisierung)** über vortrainierte Stimm-Embeddings (Resemblyzer) – ebenfalls offline
+- **Optionale Übersetzung** in eine Zielsprache
+- **Word-Bericht (.docx)** mit Zeitstempeln, Sprechern und Metadaten
+- **Video-Player** mit synchron mitlaufendem Transkript – Klick auf einen Satz springt an die Stelle
+- **Schnittmarken (IN/OUT)** und Export als **EDL** (Premiere, Avid, DaVinci Resolve) oder **FCPXML** (Final Cut Pro)
+- **Broadcast-tauglich:** MXF und andere Profi-Formate, Original-Timecode der Datei wird berücksichtigt
 - Metadaten-Auslesung (Dauer, Erstellungsdatum, GPS-Ort)
-- Word-Bericht (.docx) als Ergebnis
+- Projektdateien (`.adler`) sichern Transkript, Schnitte und Video-Verknüpfung
 - Barrierefreie Benutzeroberfläche (Tastaturbedienung, Screenreader, hohe Kontraste)
 - Läuft auf **Windows** und **macOS (Apple Silicon)**
 
@@ -27,6 +34,38 @@ Beide Pakete sind **vollständig autark** – FFmpeg, VLC und die Whisper-Modell
 
 > **macOS:** Die App ist ad-hoc signiert (kein Apple-Entwicklerzertifikat). Beim ersten Start deshalb **Rechtsklick → „Öffnen"** und im Dialog nochmals „Öffnen".
 > Die Wiedergabe läuft dort in einem eigenen VLC-Fenster; die unter Windows mögliche Einbettung des Videobildes gibt es auf macOS nicht.
+
+## Unterstützte Dateiformate
+
+Für die Transkription wird ausschließlich die **Audiospur** ausgewertet – der Video-Codec spielt dabei **keine Rolle**. Verarbeitet werden kann alles, was das mitgelieferte FFmpeg dekodiert:
+
+**Video-Container**
+
+| Format | Endungen |
+|---|---|
+| QuickTime / MPEG-4 | `.mp4` `.mov` `.m4v` `.3gp` |
+| Matroska / WebM | `.mkv` `.webm` |
+| **MXF** (Broadcast) | `.mxf` |
+| MPEG Transport Stream | `.ts` `.m2ts` `.mts` |
+| AVI | `.avi` |
+| Windows Media | `.wmv` `.asf` |
+| Flash Video | `.flv` |
+| GXF / LXF (Broadcast) | `.gxf` `.lxf` |
+
+**Audio-Formate**
+
+`.wav` `.mp3` `.m4a` `.aac` `.flac` `.aiff` `.ogg` `.opus` `.wma` `.caf` `.ac3`
+
+**Enthaltene Video-Codecs** (für die Wiedergabe im Player): H.264/AVC, H.265/HEVC, AV1, MPEG-2, **Apple ProRes** (inkl. RAW), **DNxHD/VC-3**, DV
+
+**Enthaltene Audio-Codecs:** AAC, MP3, AC-3, ALAC, FLAC, Opus, Vorbis, WMA sowie sämtliche PCM-Varianten (16/24/32 Bit) – auch mehrkanalige Broadcast-Tonspuren.
+
+> Der Dateidialog schlägt die gängigsten Endungen vor; über **„Alle Dateien"** oder per **Drag & Drop** lässt sich jedes weitere von FFmpeg unterstützte Format laden.
+> Projektdateien der App tragen die Endung `.adler`.
+
+## Datenschutz
+
+Transkription, Sprechererkennung und Berichtserstellung laufen **vollständig offline** auf dem eigenen Rechner. Einzig die optionale **Übersetzung** nutzt einen Online-Dienst und überträgt dabei den erkannten *Text*. Bleibt die Übersetzung deaktiviert, verlässt nichts den Rechner. (Die Übersetzung *ins Englische* übernimmt Whisper selbst und bleibt offline.)
 
 ## Portable EXE für Windows 11 bauen
 

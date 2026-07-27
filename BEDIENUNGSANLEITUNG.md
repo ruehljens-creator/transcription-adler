@@ -28,7 +28,7 @@ Transcription Adler transkribiert und übersetzt Audio- und Videodateien **volls
 
 - **Installer:** `TranscriptionAdler_Setup.exe` ausführen und den Anweisungen folgen. Es sind **keine Administratorrechte** nötig; die App wird für den aktuellen Benutzer installiert. Alles Nötige (FFmpeg, VLC, Whisper-Sprachmodelle) ist enthalten – keine weitere Installation erforderlich.
 - **Start:** über das **Startmenü** oder das **Desktop-Symbol** „Transcription Adler".
-- **Unterstützte Formate:** Video `.mp4 .mov .mkv`, Audio `.mp3 .wav .m4a` sowie Projektdateien `.adler`.
+- **Unterstützte Formate:** siehe [Abschnitt 3](#3-dateien-hinzufügen) – praktisch alle gängigen Video- und Audioformate.
 
 > Beim ersten Start auf fremden Rechnern kann Windows „Unbekannter Herausgeber" melden (die App ist selbstsigniert). Über **„Weitere Informationen → Trotzdem ausführen"** startet sie normal.
 
@@ -56,6 +56,20 @@ Es gibt drei Wege:
 3. **„Projekt öffnen"** – lädt eine gespeicherte `.adler`-Projektdatei samt Transkript, Video-Verknüpfung und Schnittmarken.
 
 > Die Originaldateien werden **nicht kopiert oder verändert** – sie bleiben an ihrem Speicherort. Die App merkt sich nur den Pfad.
+
+### Welche Dateien lassen sich transkribieren?
+
+Für die Transkription wertet die App ausschließlich die **Tonspur** aus – der Video-Codec spielt dabei **keine Rolle**. Verarbeitet werden kann alles, was das mitgelieferte FFmpeg lesen kann:
+
+| Bereich | Formate |
+|---|---|
+| **Video** | `.mp4` `.mov` `.m4v` `.mkv` `.webm` `.avi` `.wmv` `.asf` `.flv` `.ts` `.m2ts` `.mts` `.3gp` sowie **`.mxf`**, `.gxf`, `.lxf` (Broadcast) |
+| **Audio** | `.wav` `.mp3` `.m4a` `.aac` `.flac` `.aiff` `.ogg` `.opus` `.wma` `.caf` `.ac3` |
+| **Projekt** | `.adler` (gespeicherte Projekte der App) |
+
+Für die **Wiedergabe** im Player sind unter anderem H.264, H.265/HEVC, AV1, MPEG-2, **Apple ProRes** (auch RAW), **DNxHD/VC-3** und DV enthalten – ebenso alle PCM-Tonspuren (16/24/32 Bit, auch mehrkanalig).
+
+> Der Dateidialog schlägt die gängigsten Endungen vor. Weitere Formate lassen sich über **„Alle Dateien"** im Dialog oder einfach per **Drag & Drop** laden.
 
 ---
 
