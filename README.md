@@ -11,6 +11,22 @@ Offline-Transkription und -Übersetzung von Audio- und Videodateien mit OpenAI W
 - Metadaten-Auslesung (Dauer, Erstellungsdatum, GPS-Ort)
 - Word-Bericht (.docx) als Ergebnis
 - Barrierefreie Benutzeroberfläche (Tastaturbedienung, Screenreader, hohe Kontraste)
+- Läuft auf **Windows** und **macOS (Apple Silicon)**
+
+## Download
+
+Fertige Pakete gibt es unter [Releases](../../releases/latest):
+
+| Datei | Plattform |
+|---|---|
+| `TranscriptionAdler_Setup.exe` | Windows 10/11 (64 Bit) |
+| `TranscriptionAdler.dmg` | macOS 11+ auf Apple Silicon (arm64) |
+| `BEDIENUNGSANLEITUNG.pdf` | Anleitung mit Screenshots |
+
+Beide Pakete sind **vollständig autark** – FFmpeg, VLC und die Whisper-Modelle sind enthalten, es ist keine weitere Installation nötig.
+
+> **macOS:** Die App ist ad-hoc signiert (kein Apple-Entwicklerzertifikat). Beim ersten Start deshalb **Rechtsklick → „Öffnen"** und im Dialog nochmals „Öffnen".
+> Die Wiedergabe läuft dort in einem eigenen VLC-Fenster; die unter Windows mögliche Einbettung des Videobildes gibt es auf macOS nicht.
 
 ## Portable EXE für Windows 11 bauen
 
@@ -59,6 +75,39 @@ Der Ordner enthält alles, was zum Betrieb nötig ist – keine zusätzliche Ins
 ## Optionaler Installer (statt portable)
 
 Wenn [Inno Setup](https://jrsoftware.org/isdl.php) installiert ist, baut `build_windows.bat` automatisch zusätzlich `TranscriptionAdler_Setup.exe`. Andernfalls einfach den portablen Ordner verteilen.
+
+## App und DMG für macOS bauen (Apple Silicon)
+
+### Voraussetzungen
+
+- macOS 11 oder neuer auf Apple Silicon (arm64)
+- **Python 3.10 oder 3.11** – z. B. `brew install python@3.11`
+  (System-Python 3.9 und aktuelle 3.13/3.14 funktionieren **nicht**: für sie gibt es keine PyTorch-/Whisper-Pakete)
+- **Homebrew** mit `ffmpeg`: `brew install ffmpeg`
+- **VLC**: `brew install --cask vlc` – wird ins Bundle kopiert, damit das DMG autark ist
+- Xcode Command Line Tools: `xcode-select --install`
+- Etwa **10 GB** freier Speicher während des Builds
+
+### Build starten
+
+```bash
+./build_macos.sh
+```
+
+Das Skript legt eine virtuelle Umgebung an, installiert alle Abhängigkeiten
+(inklusive Resemblyzer für die Sprechererkennung), lädt die Whisper-Modelle,
+erzeugt aus `eagle_icon.png` ein `.icns`, baut das App-Bundle über
+`TranscriptionAdler-macOS.spec`, signiert es ad-hoc und packt ein DMG.
+
+### Ergebnis
+
+```
+dist/TranscriptionAdler.app
+TranscriptionAdler.dmg
+```
+
+Das Bundle enthält FFmpeg, die VLC-Laufzeit (libVLC + Plugins) und die
+Whisper-Modelle – auf dem Zielrechner muss nichts nachinstalliert werden.
 
 ## Barrierefreiheit
 
